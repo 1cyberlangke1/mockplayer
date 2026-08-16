@@ -31,4 +31,7 @@ public interface IInputOverrideHandler extends IBehavior {
     void setInputForceState(Input input, boolean forced);
 
     void clearAllKeys();
+
+    /** 写空输入（stop 后清残留 moveVector/keyPresses；主项目 stop 路径调用）。 */
+    void clearInput();
 }

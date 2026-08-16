@@ -1,7 +1,6 @@
 package com.mockplayer.session;
 
 import com.mockplayer.baritone.api.IBaritone;
-import com.mockplayer.baritone.utils.accessor.IClientInputAccessor;
 import com.mockplayer.baritone.api.pathing.goals.GoalBlock;
 import com.mockplayer.baritone.api.pathing.goals.GoalComposite;
 import com.mockplayer.baritone.api.pathing.goals.GoalNear;
@@ -14,7 +13,6 @@ import com.mockplayer.api.navigate.NavigationMode;
 import com.mockplayer.api.navigate.NavigatorTask;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.Entity;
 
 import java.util.ArrayList;
@@ -145,11 +143,9 @@ public final class BaritoneNavigator implements BotNavigator {
         this.task = NavigatorTask.NONE;
         this.goal = null;
         this.bot.setNavigating(false);
-        LocalPlayer player = this.bot.getLocalPlayer();
-        if (player != null && player.input instanceof IClientInputAccessor accessor) {
-            accessor.baritone$setMoveVector(new net.minecraft.world.phys.Vec2(0.0F, 0.0F));
-            accessor.baritone$setKeyPresses(new net.minecraft.world.entity.player.Input(
-                    false, false, false, false, false, false, false));
+        if (this.baritone != null) {
+            // 输入写入/清理职责归位到 baritone（InputOverrideHandler.clearInput）
+            this.baritone.getInputOverrideHandler().clearInput();
         }
     }
 
