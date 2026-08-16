@@ -45,6 +45,11 @@ public:
 
     __attribute__((noinline)) void update(PathNode* val) {
         int index = val->heapPosition;
+        // 防御（mockplayer P15）：heapPosition 损坏（越界/负值）时直接返回，
+        // 防止 vector 越界访问（生产 0x20474343 崩溃的候选根因）
+        if (index < 1 || index > this->size) {
+            return;
+        }
         int parentIndex = unsignedRShift(index, 1);
         const double cost = val->combinedCost;
         PathNode* parentNode = vector[parentIndex];
@@ -60,7 +65,11 @@ public:
     }
 
     __attribute__((noinline)) PathNode* removeLowest() {
-        if (this->size == 0) throw "trolled";
+        // 防御（mockplayer P15）：空堆不 throw（原实现 throw "trolled" 未捕获 →
+        // std::terminate → 杀 JVM），返回 nullptr 由调用点跳过
+        if (this->size == 0) {
+            return nullptr;
+        }
 
         PathNode* result = vector[1];
         PathNode* val = vector[this->size];
