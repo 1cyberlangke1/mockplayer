@@ -365,6 +365,13 @@ public class PathfindingSuite extends TestSuite {
         ctx.await("oak_log picked up verify", () -> ctx.bot() != null
                 && ctx.bot().getLocalPlayer() != null
                 && hasItem(ctx, net.minecraft.world.item.Items.OAK_LOG), 100000);
+        // 新 bug 回归（2026-08-16 生产实测）：捡完掉落物后任务必须自然结束
+        // （droppedScanCache 缓存旧位置导致 rescan 永远认为有目标 → 永久卡住；
+        //  实时扫描后目标失效 → rescan 扫空取消）
+        ctx.await("mine auto-finishes after pickup", () -> ctx.bot() != null
+                && !ctx.bot().navigate().isActive(), 600);
+        ctx.check("mine auto-finish clean", () -> ctx.bot() != null
+                && ctx.bot().navigate().currentTask() == NavigatorTask.NONE);
         ctx.run(() -> ctx.bot().navigate().stop());
         ctx.run(() -> MockplayerApi.bots().removeBot(BOT_A, "test"));
     }
