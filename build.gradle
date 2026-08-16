@@ -67,6 +67,13 @@ tasks.register('verifyBaritoneLang') {
             def matcher = f.text =~ /(?:Component|net\.minecraft\.network\.chat\.Component)\.translatable(?:Escape)?\("([A-Za-z0-9_.]+)"/
             while (matcher.find()) {
                 String k = matcher.group(1)
+                // 配置界面（BaritoneConfigScreen）的 key 是动态拼接（"baritone.config.option." + key），
+                // 正则只能提取前缀字面量；界面 key 由界面代码与 lang 文件手动维护（与 mockplayer
+                // 的 config.mockplayer.* 同类别），不参与日志消息完整性校验。
+                // 非 baritone.* key（如原版 gui.done）由 MC 语言文件提供，同样不校验。
+                if (!k.startsWith("baritone.") || k.startsWith("baritone.config.")) {
+                    continue
+                }
                 keys.add(k)
                 int args = countTranslatableArgs(f.text, matcher.start())
                 keyArgCounts.computeIfAbsent(k, { new HashSet<Integer>() }).add(args)
