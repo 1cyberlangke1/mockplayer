@@ -44,6 +44,19 @@ public class PathfindingSuite extends TestSuite {
         test("销毁清理", this::destroyCleanup);
         test("API 全方法接线", this::apiAllMethodsWiring);
         test("命令层 mode/elytra/mine/follow", this::commandLayerWiring);
+        test("渲染默认 F3_ONLY 不渲染", this::renderDefaultOff);
+    }
+
+    /** 测试 8：默认 F3_ONLY 下（F3 关）渲染闸门为 false（回归：原每 tick 同步首次跳过导致一直渲染）。 */
+    private void renderDefaultOff(TestContext ctx) {
+        ctx.run(() -> SuitesSupport.createBot(ctx, BOT_A));
+        ctx.await("lifecycle PLAYING", () -> ctx.bot() != null
+                && ctx.bot().getLifecycle() == BotLifecycle.PLAYING, 300);
+        ctx.run(() -> {
+            // bot 上线走 SessionManager.tick → ensureRenderGate 已注册；F3 关闭时 F3_ONLY 必须不渲染
+            ctx.checkNow("render gate off by default (F3 off)",
+                    !com.mockplayer.baritone.utils.RenderGate.shouldRender());
+        });
     }
 
     /** 测试 1：goTo 端到端——位移 > 2 格 + 最终水平距离 < 3 格。 */

@@ -40,8 +40,8 @@ public class SessionManager {
     public void tick() {
         this.manager.tick();
         BatchCommands.tick(); // 批量创建队列（tick 驱动）
-        // 寻路渲染三态（全局，F3_ONLY 需每 tick 跟随 F3 开关；值未变时零开销跳过）
-        NavigateSupport.syncRender();
+        // 渲染闸门注册（幂等一次）：PathRenderer 每帧实时判定三态，无需每 tick 同步
+        NavigateSupport.ensureRenderGate();
     }
 
     /**

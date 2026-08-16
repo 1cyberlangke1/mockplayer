@@ -132,7 +132,7 @@ public final class ModConfigScreen extends YACLScreen {
                                         ModConfig.DEFAULT_PAYLOAD_SEND_LOG_LIMIT,
                                         ModConfig.MIN_PAYLOAD_SEND_LOG_LIMIT, ModConfig.MAX_PAYLOAD_SEND_LOG_LIMIT,
                                         cfg::getPayloadSendLogLimit, cfg::setPayloadSendLogLimit))
-                                .option(stringOption("payloadPassthroughNamespaces",
+                                .option(stringOption("payloadPassthroughNamespaces", "option",
                                         () -> String.join(", ", cfg.getPayloadPassthroughNamespaces()),
                                         value -> {
                                             List<String> list = new ArrayList<>();
@@ -215,13 +215,19 @@ public final class ModConfigScreen extends YACLScreen {
                 .build();
     }
 
-    /** 命令名字符串选项：名称/描述/绑定/文本输入（空串 = 禁用）。 */
+    /** 命令名字符串选项（i18n 前缀 = command）：名称/描述/绑定/文本输入（空串 = 禁用）。 */
     private static Option<String> stringOption(String key,
                                                Supplier<String> getter, Consumer<String> setter) {
+        return stringOption(key, "command", getter, setter);
+    }
+
+    /** 字符串选项（prefix = option/command 的 i18n 前缀，防引用错前缀显示原始 key）。 */
+    private static Option<String> stringOption(String key, String prefix,
+                                               Supplier<String> getter, Consumer<String> setter) {
         return Option.<String>createBuilder()
-                .name(Component.translatable("config.mockplayer.command." + key))
+                .name(Component.translatable("config.mockplayer." + prefix + "." + key))
                 .description(OptionDescription.of(
-                        Component.translatable("config.mockplayer.command." + key + ".description")))
+                        Component.translatable("config.mockplayer." + prefix + "." + key + ".description")))
                 .binding(key, getter, setter)
                 .controller(option -> StringControllerBuilder.create(option))
                 .build();
