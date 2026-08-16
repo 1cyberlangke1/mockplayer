@@ -88,6 +88,24 @@ public final class ModConfigScreen extends YACLScreen {
                                 .name(Component.translatable("config.mockplayer.group.debug"))
                                 .option(enumOption("debugOverlayMode", RenderMode.F3_ONLY,
                                         cfg::getDebugOverlayMode, cfg::setDebugOverlayMode))
+                                .option(booleanOption("navigateEnabled", true,
+                                        cfg::isNavigateEnabled, cfg::setNavigateEnabled))
+                                .option(booleanOption("navigateAllowSprint", true,
+                                        cfg::isNavigateAllowSprint, cfg::setNavigateAllowSprint))
+                                .option(booleanOption("navigateAllowBreak", true,
+                                        cfg::isNavigateAllowBreak, cfg::setNavigateAllowBreak))
+                                .option(booleanOption("navigateAllowPlace", true,
+                                        cfg::isNavigateAllowPlace, cfg::setNavigateAllowPlace))
+                                .option(booleanOption("navigateAllowParkour", false,
+                                        cfg::isNavigateAllowParkour, cfg::setNavigateAllowParkour))
+                                .option(booleanOption("navigateAllowDiagonal", false,
+                                        cfg::isNavigateAllowDiagonal, cfg::setNavigateAllowDiagonal))
+                                .option(booleanOption("navigateAvoidance", false,
+                                        cfg::isNavigateAvoidance, cfg::setNavigateAvoidance))
+                                .option(booleanOption("navigatePreferSilkTouch", false,
+                                        cfg::isNavigatePreferSilkTouch, cfg::setNavigatePreferSilkTouch))
+                                .option(booleanOption("navigateMineScanDroppedItems", true,
+                                        cfg::isNavigateMineScanDroppedItems, cfg::setNavigateMineScanDroppedItems))
                                 .option(enumOption("navigateRenderMode", RenderMode.F3_ONLY,
                                         cfg::getNavigateRenderMode, cfg::setNavigateRenderMode))
                                 .option(intOption("fakePlayerChunkRadius",

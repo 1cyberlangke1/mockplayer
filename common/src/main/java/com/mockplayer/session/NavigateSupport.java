@@ -23,7 +23,9 @@ public final class NavigateSupport {
 
     /** /control config set 支持的 key 白名单（与 {@link #effectiveValue} 对应）。 */
     public static final List<String> CONFIG_KEYS = List.of(
-            "enabled", "allowSprint", "allowBreak", "allowPlace", "pathTimeoutMs");
+            "enabled", "allowSprint", "allowBreak", "allowPlace",
+            "allowParkour", "allowDiagonal", "avoidance",
+            "preferSilkTouch", "mineScanDroppedItems", "pathTimeoutMs");
 
     private NavigateSupport() {
     }
@@ -40,6 +42,11 @@ public final class NavigateSupport {
             case "allowSprint" -> cfg.isNavigateAllowSprint();
             case "allowBreak" -> cfg.isNavigateAllowBreak();
             case "allowPlace" -> cfg.isNavigateAllowPlace();
+            case "allowParkour" -> cfg.isNavigateAllowParkour();
+            case "allowDiagonal" -> cfg.isNavigateAllowDiagonal();
+            case "avoidance" -> cfg.isNavigateAvoidance();
+            case "preferSilkTouch" -> cfg.isNavigatePreferSilkTouch();
+            case "mineScanDroppedItems" -> cfg.isNavigateMineScanDroppedItems();
             case "pathTimeoutMs" -> cfg.getNavigatePathTimeoutMs();
             default -> null;
         };
@@ -75,6 +82,14 @@ public final class NavigateSupport {
         settings.allowSprint.value = Boolean.TRUE.equals(effectiveValue(session, "allowSprint"));
         settings.allowBreak.value = Boolean.TRUE.equals(effectiveValue(session, "allowBreak"));
         settings.allowPlace.value = Boolean.TRUE.equals(effectiveValue(session, "allowPlace"));
+        settings.allowParkour.value = Boolean.TRUE.equals(effectiveValue(session, "allowParkour"));
+        // baritone 无单一 allowDiagonal：斜向由 上下坡 两个开关控制，同值写入
+        boolean diagonal = Boolean.TRUE.equals(effectiveValue(session, "allowDiagonal"));
+        settings.allowDiagonalAscend.value = diagonal;
+        settings.allowDiagonalDescend.value = diagonal;
+        settings.avoidance.value = Boolean.TRUE.equals(effectiveValue(session, "avoidance"));
+        settings.preferSilkTouch.value = Boolean.TRUE.equals(effectiveValue(session, "preferSilkTouch"));
+        settings.mineScanDroppedItems.value = Boolean.TRUE.equals(effectiveValue(session, "mineScanDroppedItems"));
         Object timeout = effectiveValue(session, "pathTimeoutMs");
         if (timeout instanceof Number n) {
             settings.primaryTimeoutMS.value = n.longValue();

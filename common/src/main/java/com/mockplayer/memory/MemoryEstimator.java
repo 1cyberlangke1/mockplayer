@@ -161,7 +161,14 @@ public final class MemoryEstimator {
             return 0;
         }
         long total = LayoutSizes.shallowSize(ticks.getClass());
-        total += StructureHeap.priorityQueueHeap(access.mockplayer$getTickQueue().size());
+        java.util.Queue<?> tickQueue = access.mockplayer$getTickQueue();
+        if (tickQueue == null) {
+            // c2me 等 mod 的 LevelChunkTicks 实现字段为 null（接口通过但数据不在原版字段），
+            // 降级为结构下界并提示一次（不静默：记账精度下降必须可见）。
+            warnAccessor("ticks");
+            return 0;
+        }
+        total += StructureHeap.priorityQueueHeap(tickQueue.size());
         java.util.List<?> pending = access.mockplayer$getPendingTicks();
         if (pending != null && !pending.isEmpty()) {
             total += LayoutSizes.shallowSize(pending.getClass())

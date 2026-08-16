@@ -40,11 +40,108 @@ public class PathfindingSuite extends TestSuite {
         test("goTo 端到端", this::goToEndToEnd);
         test("stop 接线", this::stopWiring);
         test("per-bot 配置独立", this::perBotConfigIsolation);
-        test("elytra API 接线", this::elytraApiWiring);
         test("销毁清理", this::destroyCleanup);
         test("API 全方法接线", this::apiAllMethodsWiring);
-        test("命令层 mode/elytra/mine/follow", this::commandLayerWiring);
+        test("命令层 mode/mine/follow", this::commandLayerWiring);
         test("渲染默认 F3_ONLY 不渲染", this::renderDefaultOff);
+        test("mine 拾取掉落物", this::minePicksUpDrops);
+    }
+
+    /** 测试 9：mine 按类型挖矿能拾取掉落物——服务端生成 oak_log 掉落物在假人面前，
+     *  mine 后 MineProcess 扫描到掉落物（filter 匹配）→ 寻路过去 → 背包出现 oak_log。 */
+    private void minePicksUpDrops(TestContext ctx) {
+        ctx.run(() -> SuitesSupport.createBot(ctx, BOT_A));
+        ctx.await("lifecycle PLAYING", () -> ctx.bot() != null
+                && ctx.bot().getLifecycle() == BotLifecycle.PLAYING, 300);
+        SuitesSupport.awaitChunkLoaded(ctx);
+        // 传送到空旷固定位置（消除 spawn 随机性导致的不稳定：村庄/主玩家附近会挡路）
+        ctx.run(() -> ctx.server().execute(() -> {
+            ctx.server().getCommands().performPrefixedCommand(
+                    ctx.server().createCommandSourceStack(),
+                    "tp " + BOT_A + " 100 4 100");
+        }));
+        ctx.await("bot teleported", () -> ctx.bot() != null
+                && ctx.bot().getLocalPlayer() != null
+                && ctx.bot().getLocalPlayer().blockPosition().equals(new BlockPos(100, 4, 100)), 200);
+        // 等待 tp 区域区块数据写入假人 level（寻路 BSI 依赖；位置同步 ≠ 区块就绪）
+        ctx.await("tp area chunk loaded", () -> ctx.bot() != null
+                && ctx.bot().getLevel() != null
+                && !ctx.bot().getLevel().getBlockState(new BlockPos(100, 3, 100)).isAir()
+                && !ctx.bot().getLevel().getBlockState(new BlockPos(103, 3, 100)).isAir(), 300);
+        ctx.run(() -> this.startPos = ctx.bot().getLocalPlayer().blockPosition());
+        // 服务端在假人面前生成 oak_log 掉落物（PickupDelay=0，可立即捡）
+        ctx.run(() -> ctx.server().execute(() -> {
+            ServerPlayer sp = ctx.server().getPlayerList().getPlayerByName(BOT_A);
+            if (sp != null) {
+                // 直接用服务端代码生成 ItemEntity（summon NBT 解析在 26.x 不稳定）
+                net.minecraft.world.entity.item.ItemEntity item =
+                        new net.minecraft.world.entity.item.ItemEntity(
+                                (net.minecraft.server.level.ServerLevel) sp.level(),
+                                sp.getX() + 3.0, sp.getY() + 0.5, sp.getZ(),
+                                new net.minecraft.world.item.ItemStack(
+                                        net.minecraft.world.item.Items.OAK_LOG));
+                item.setPickUpDelay(0);
+                ((net.minecraft.server.level.ServerLevel) sp.level()).addFreshEntity(item);
+            }
+        }));
+        // 诊断 1：掉落物必须进入假人 level（AddEntity 包 → handleAddEntity → level.addEntity）
+        ctx.await("dropped item in bot level", () -> {
+            if (ctx.bot() == null) {
+                return false;
+            }
+            java.util.List<net.minecraft.world.entity.Entity> near =
+                    ctx.bot().getEntitiesNear(32);
+            return near.stream().anyMatch(e -> e instanceof net.minecraft.world.entity.item.ItemEntity);
+        }, 400);
+        ctx.run(() -> {
+            java.util.List<net.minecraft.world.entity.Entity> near = ctx.bot().getEntitiesNear(32);
+            ctx.checkNow("dropped item visible to bot", near.stream()
+                    .anyMatch(e -> e instanceof net.minecraft.world.entity.item.ItemEntity));
+        });
+        // 诊断 2：drops 反射链路——filter 必须匹配 oak_log 物品（stackHashes 非空）
+        ctx.run(() -> {
+            boolean matched = false;
+            try {
+                com.mockplayer.baritone.api.utils.BlockOptionalMetaLookup lookup =
+                        new com.mockplayer.baritone.api.utils.BlockOptionalMetaLookup("minecraft:oak_log");
+                matched = lookup.has(new net.minecraft.world.item.ItemStack(
+                        net.minecraft.world.item.Items.OAK_LOG));
+            } catch (Throwable t) {
+                t.printStackTrace();
+            }
+            ctx.checkNow("filter matches oak_log item", matched);
+            // 联网路径数据源：vanilla pack 完整加载（ServerLevelStub.load）必须含原版 loot tables
+            try {
+                var loaded = com.mockplayer.baritone.api.utils.BlockOptionalMeta.ServerLevelStub.load();
+                var reg = loaded.join().lookupOrThrow(net.minecraft.core.registries.Registries.LOOT_TABLE);
+                ctx.checkNow("vanilla pack has oak_log loot table",
+                        reg.getValue(net.minecraft.world.level.block.Blocks.OAK_LOG
+                                .getLootTable().orElseThrow()) != null);
+            } catch (Throwable t) {
+                t.printStackTrace();
+                ctx.checkNow("vanilla pack has oak_log loot table", false);
+            }
+        });
+        // mine oak_log：MineProcess 把掉落物位置加入目标 → 假人走过去捡起
+        ctx.run(() -> ctx.platform().executeClientCommand(
+                "control " + BOT_A + " mine minecraft:oak_log"));
+        ctx.await("mine task active", () -> ctx.bot() != null
+                && ctx.bot().navigate().isActive(), 100);
+        ctx.await("oak_log picked up", () -> ctx.bot() != null
+                && ctx.bot().getLocalPlayer() != null
+                && hasItem(ctx, net.minecraft.world.item.Items.OAK_LOG), 100000);
+        // 二次验证（await 成功即 PASS；checkNow 在同一 tick 求值有时早于背包同步）
+        ctx.await("oak_log picked up verify", () -> ctx.bot() != null
+                && ctx.bot().getLocalPlayer() != null
+                && hasItem(ctx, net.minecraft.world.item.Items.OAK_LOG), 100000);
+        ctx.run(() -> ctx.bot().navigate().stop());
+        ctx.run(() -> MockplayerApi.bots().removeBot(BOT_A, "test"));
+    }
+
+    /** 假人背包是否含有指定物品（含盔甲/副手/末影箱之外的常规槽位）。 */
+    private static boolean hasItem(TestContext ctx, net.minecraft.world.item.Item item) {
+        return ctx.bot().getLocalPlayer().getInventory().contains(
+                stack -> stack.getItem() == item);
     }
 
     /** 测试 8：默认 F3_ONLY 下（F3 关）渲染闸门为 false（回归：原每 tick 同步首次跳过导致一直渲染）。 */
@@ -160,28 +257,6 @@ public class PathfindingSuite extends TestSuite {
         });
     }
 
-    /** 测试 4：elytra API 接线——调用不抛异常 + 任务状态正确（不真飞）。 */
-    private void elytraApiWiring(TestContext ctx) {
-        ctx.run(() -> SuitesSupport.createBot(ctx, BOT_A));
-        ctx.await("lifecycle PLAYING", () -> ctx.bot() != null
-                && ctx.bot().getLifecycle() == BotLifecycle.PLAYING, 300);
-        ctx.run(() -> {
-            BlockPos target = ctx.bot().getLocalPlayer().blockPosition().offset(5, 0, 5);
-            boolean threw = false;
-            try {
-                ctx.bot().navigate().elytra(target);
-            } catch (Exception e) {
-                threw = true;
-            }
-            ctx.checkNow("elytra call does not throw", !threw);
-            ctx.checkNow("elytra task registered",
-                    ctx.bot().navigate().currentTask()
-                            == com.mockplayer.api.navigate.NavigatorTask.ELYTRA);
-            ctx.bot().navigate().stop();
-            ctx.checkNow("elytra stopped", !ctx.bot().navigate().isActive());
-        });
-    }
-
     /** 测试 5：销毁清理——delplayer 后 baritone 实例被 destroyBaritone 移除。 */
     private void destroyCleanup(TestContext ctx) {
         ctx.run(() -> SuitesSupport.createBot(ctx, BOT_A));
@@ -245,10 +320,9 @@ public class PathfindingSuite extends TestSuite {
                 nav.stop();
             }
 
-            // mode 切换：调用不抛 + 状态保留
+            // mode 切换：调用不抛 + 状态保留（仅 walk；鞘翅已移除）
             boolean modeThrew = false;
             try {
-                nav.mode(NavigationMode.ELYTRA);
                 nav.mode(NavigationMode.WALK);
             } catch (Exception e) {
                 modeThrew = true;
@@ -282,7 +356,7 @@ public class PathfindingSuite extends TestSuite {
         });
     }
 
-    /** 测试 7：命令层接线——/control mode/elytra/mine/follow 执行后任务状态正确。 */
+    /** 测试 7：命令层接线——/control mode/mine/follow 执行后任务状态正确（鞘翅已移除）。 */
     private void commandLayerWiring(TestContext ctx) {
         ctx.run(() -> SuitesSupport.createBot(ctx, BOT_A));
         ctx.await("lifecycle PLAYING", () -> ctx.bot() != null
@@ -302,34 +376,19 @@ public class PathfindingSuite extends TestSuite {
                 && ctx.bot().getEntitiesNear(16).stream().anyMatch(e -> e instanceof Villager), 200);
         ctx.run(() -> {
             BlockPos base = ctx.bot().getLocalPlayer().blockPosition();
-            // mode：walk/elytra 切换（不启动任务，仅验证命令可执行）
-            ctx.checkNow("mode elytra ok", ctx.platform().executeClientCommand(
-                    "control " + BOT_A + " mode elytra"));
+            // mode：walk 切换（不启动任务，仅验证命令可执行）
             ctx.checkNow("mode walk ok", ctx.platform().executeClientCommand(
                     "control " + BOT_A + " mode walk"));
-            // mode elytra 后 goto：走鞘翅进程（模式生效验证）
-            ctx.checkNow("mode elytra again", ctx.platform().executeClientCommand(
-                    "control " + BOT_A + " mode elytra"));
-            BlockPos far = base.offset(30, 0, 30);
-            ctx.checkNow("goto after mode elytra ok", ctx.platform().executeClientCommand(
-                    "control " + BOT_A + " goto " + far.getX() + " " + far.getY() + " " + far.getZ()));
-            ctx.checkNow("goto uses elytra process", ctx.bot() instanceof BotImpl impl
-                    && impl.session().getBaritone() != null
-                    && impl.session().getBaritone().getElytraProcess().currentDestination() != null);
-            ctx.bot().navigate().stop();
             // mode 非法值：fail 反馈不抛异常，不打断现有任务
             ctx.checkNow("mode invalid no throw", ctx.platform().executeClientCommand(
                     "control " + BOT_A + " mode fly"));
             ctx.checkNow("mode invalid keeps task state",
                     ctx.bot().navigate().currentTask() == NavigatorTask.NONE);
-            // elytra：任务注册 + stop 复位（不真飞）
-            BlockPos target = base.offset(5, 0, 5);
-            ctx.checkNow("elytra command ok", ctx.platform().executeClientCommand(
-                    "control " + BOT_A + " elytra " + target.getX() + " " + target.getY() + " " + target.getZ()));
-            ctx.checkNow("elytra task via command",
-                    ctx.bot().navigate().currentTask() == NavigatorTask.ELYTRA);
-            ctx.bot().navigate().stop();
-            ctx.checkNow("elytra stopped", !ctx.bot().navigate().isActive());
+            // 鞘翅已移除：control elytra 命令不存在，执行失败且不启动任务
+            ctx.checkNow("elytra command removed", !ctx.platform().executeClientCommand(
+                    "control " + BOT_A + " elytra 1 2 3"));
+            ctx.checkNow("elytra removed keeps task state",
+                    ctx.bot().navigate().currentTask() == NavigatorTask.NONE);
             // mine：按类型挖矿任务注册 + stop 复位（不真挖完）
             ctx.checkNow("mine command ok", ctx.platform().executeClientCommand(
                     "control " + BOT_A + " mine dirt"));
@@ -342,6 +401,13 @@ public class PathfindingSuite extends TestSuite {
                     "control " + BOT_A + " mine nonexistent_block_xyz"));
             ctx.checkNow("mine unknown block keeps task state",
                     ctx.bot().navigate().currentTask() == NavigatorTask.NONE);
+            // mine 带 namespace 前缀（resource location 参数，minecraft:oak_log 可解析）
+            ctx.checkNow("mine with namespace ok", ctx.platform().executeClientCommand(
+                    "control " + BOT_A + " mine minecraft:oak_log"));
+            ctx.checkNow("mine with namespace task",
+                    ctx.bot().navigate().currentTask() == NavigatorTask.MINE);
+            ctx.bot().navigate().stop();
+            ctx.checkNow("mine with namespace stopped", !ctx.bot().navigate().isActive());
             // follow：跟随附近村民；未知类型走失败反馈
             ctx.checkNow("follow command ok", ctx.platform().executeClientCommand(
                     "control " + BOT_A + " follow villager"));

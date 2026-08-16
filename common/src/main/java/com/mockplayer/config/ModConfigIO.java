@@ -74,6 +74,11 @@ public final class ModConfigIO {
             config.setNavigateAllowSprint(readBool(root, "navigateAllowSprint", true));
             config.setNavigateAllowBreak(readBool(root, "navigateAllowBreak", true));
             config.setNavigateAllowPlace(readBool(root, "navigateAllowPlace", true));
+            config.setNavigateAllowParkour(readBool(root, "navigateAllowParkour", false));
+            config.setNavigateAllowDiagonal(readBool(root, "navigateAllowDiagonal", false));
+            config.setNavigateAvoidance(readBool(root, "navigateAvoidance", false));
+            config.setNavigatePreferSilkTouch(readBool(root, "navigatePreferSilkTouch", false));
+            config.setNavigateMineScanDroppedItems(readBool(root, "navigateMineScanDroppedItems", true));
             config.setNavigatePathTimeoutMs(readInt(root, "navigatePathTimeoutMs",
                     ModConfig.DEFAULT_NAVIGATE_PATH_TIMEOUT_MS,
                     ModConfig.MIN_NAVIGATE_PATH_TIMEOUT_MS,

@@ -18,10 +18,13 @@
 package com.mockplayer.baritone.api.utils;
 
 import com.mockplayer.baritone.api.utils.accessor.IItemStack;
+import com.mockplayer.baritone.api.utils.accessor.ILootItem;
+import com.mockplayer.baritone.api.utils.accessor.ILootPool;
 import com.mockplayer.baritone.api.utils.accessor.ILootTable;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.LayeredRegistryAccess;
 import net.minecraft.core.Registry;
@@ -50,12 +53,10 @@ import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.dimension.LevelStem;
 import net.minecraft.world.level.storage.LevelStorageSource;
 import net.minecraft.world.level.storage.ServerLevelData;
-import net.minecraft.world.level.storage.loot.LootContext;
-import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.world.level.storage.loot.LootPool;
 import net.minecraft.world.level.storage.loot.LootTable;
-import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
-import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
-import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.storage.loot.entries.LootItem;
+import net.minecraft.world.level.storage.loot.entries.LootPoolEntryContainer;
 import sun.misc.Unsafe;
 
 import javax.annotation.Nonnull;
@@ -149,13 +150,20 @@ public final class BlockOptionalMeta {
     }
 
     private static ImmutableSet<Integer> getStackHashes(Set<BlockState> blockstates) {
-        //noinspection ConstantConditions
+        Set<Item> items = new HashSet<>();
+        for (BlockState state : blockstates) {
+            Block block = state.getBlock();
+            // loot table 掉落物（单机完整；联网用 vanilla pack 加载，mod 方块/数据包自定义可能为空）
+            items.addAll(drops(block));
+            // 保底：方块自身物品（BlockItem）——联网拿不到 loot table 时 oak_log/dirt 等也能捡
+            Item self = block.asItem();
+            if (self != Items.AIR) {
+                items.add(self);
+            }
+        }
         return ImmutableSet.copyOf(
-                blockstates.stream()
-                        .flatMap(state -> drops(state.getBlock())
-                                .stream()
-                                .map(item -> new ItemStack(item, 1))
-                        )
+                items.stream()
+                        .map(item -> new ItemStack(item, 1))
                         .map(stack -> ((IItemStack) (Object) stack).getBaritoneHash())
                         .toArray(Integer[]::new)
         );
@@ -230,12 +238,7 @@ public final class BlockOptionalMeta {
                 List<Item> items = new ArrayList<>();
                 try {
                     ServerLevel lv2 = ServerLevelStub.fastCreate();
-
-                    LootParams.Builder lv5 = new LootParams.Builder(lv2)
-                        .withParameter(LootContextParams.ORIGIN, Vec3.ZERO)
-                        .withParameter(LootContextParams.BLOCK_STATE, b.defaultBlockState())
-                        .withParameter(LootContextParams.TOOL, new ItemStack(Items.NETHERITE_PICKAXE, 1));
-                    getDrops(block, lv5).stream().map(ItemStack::getItem).forEach(items::add);
+                    getDrops(block, lv2).stream().map(ItemStack::getItem).forEach(items::add);
                 } catch (Throwable e) {
                     e.printStackTrace();
                 }
@@ -244,15 +247,44 @@ public final class BlockOptionalMeta {
         });
     }
 
-    private static List<ItemStack> getDrops(Block state, LootParams.Builder params) {
+    private static List<ItemStack> getDrops(Block state, ServerLevel serverLevel) {
         Optional<ResourceKey<LootTable>> lv = state.getLootTable();
         if (lv.isEmpty()) {
             return Collections.emptyList();
         } else {
-            LootParams lv2 = params.withParameter(LootContextParams.BLOCK_STATE, state.defaultBlockState()).create(LootContextParamSets.BLOCK);
-            ServerLevelStub lv3 = (ServerLevelStub) lv2.getLevel();
-            LootTable lv4 = lv3.holder().getLootTable(lv.get());
-            return((ILootTable) lv4).invokeGetRandomItems(new LootContext.Builder(lv2).withOptionalRandomSeed(1).create(null));
+            // loot tables 在服务端的 reloadable 层（不在 registryAccess() 里）：
+            // 单机直接用服务端 holder；连服务器用 vanilla pack 完整加载的 holder（首次 join 等待）。
+            net.minecraft.server.MinecraftServer singleplayer =
+                    net.minecraft.client.Minecraft.getInstance().getSingleplayerServer();
+            LootTable lv4 = singleplayer != null
+                    ? singleplayer.reloadableRegistries().getLootTable(lv.get())
+                    : ((ServerLevelStub) serverLevel).holder().getLootTable(lv.get());
+            if (lv4 == null) {
+                return Collections.emptyList();
+            }
+            // fabric-loot-api-v3 的 modifyDrops 包装需要真实 MinecraftServer（ServerLevelStub 为
+            // Unsafe 分配、server=null），走 getRandomItems 会 NPE → drops() 空 → filter.has(物品)
+            // 恒 false → 掉落物不捡。用 mixin accessor 读 pools/entries/item（标准注入，非反射），
+            // 数据驱动、绕开包装；LootItemCondition 不影响「可能掉落」的判定（宁多勿缺）。
+            List<ItemStack> items = new ArrayList<>();
+            List<LootPool> pools = ((ILootTable) lv4).pools();
+            if (pools != null) {
+                for (LootPool pool : pools) {
+                    List<LootPoolEntryContainer> entries = ((ILootPool) pool).entries();
+                    if (entries == null) {
+                        continue;
+                    }
+                    for (LootPoolEntryContainer entry : entries) {
+                        if (entry instanceof LootItem lootItem) {
+                            Holder<Item> holder = ((ILootItem) lootItem).item();
+                            if (holder != null && holder.value() != null) {
+                                items.add(new ItemStack(holder.value(), 1));
+                            }
+                        }
+                    }
+                }
+            }
+            return items;
         }
     }
 
@@ -281,10 +313,16 @@ public final class BlockOptionalMeta {
 
         @Override
         public RegistryAccess registryAccess() {
-            if (client.level != null) {
-                return client.level.registryAccess();
+            // 优先用服务端 registry（含 loot tables）：客户端 registry 不含 loot tables，
+            // getLootTable 返回 EMPTY → drops() 空 → filter.has(物品) 恒 false → 掉落物不捡。
+            // 单机（含 mocktest）：getSingleplayerServer() 可用，零加载开销；
+            // 连服务器：回退到 vanilla pack 完整加载（首次 join 等待，结果缓存）。
+            net.minecraft.server.MinecraftServer server =
+                    net.minecraft.client.Minecraft.getInstance().getSingleplayerServer();
+            if (server != null) {
+                return server.registryAccess();
             }
-            return registryAccess.join();
+            return BlockOptionalMeta.ServerLevelStub.registryAccess.join();
         }
 
         public ReloadableServerRegistries.Holder holder() {
