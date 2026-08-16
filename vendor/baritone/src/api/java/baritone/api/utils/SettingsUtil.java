@@ -94,7 +94,8 @@ public class SettingsUtil {
                 }
             });
         } catch (NoSuchFileException ignored) {
-            Helper.HELPER.logDirect("Baritone settings file not found, resetting.");
+            // 首次运行无 settings.txt 是正常场景（默认值即默认设置）；per-instance 配置由主项目注入，
+            // 不打扰用户（原版每次启动都打这条噪音日志）
         } catch (Exception ex) {
             Helper.HELPER.logDirect("Exception while reading Baritone settings, some settings may be reset to default values!");
             ex.printStackTrace();
