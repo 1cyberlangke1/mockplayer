@@ -42,9 +42,6 @@ public final class BaritoneNavigator implements BotNavigator {
     private NavigatorTask task = NavigatorTask.NONE;
     /** 当前任务目标（查询用；任务结束清空）。 */
     private BlockPos goal;
-    /** 任务开始时的假人朝向（任务结束恢复，baritone 寻路完成不改朝向）。 */
-    private float startYaw;
-    private float startPitch;
 
     public BaritoneNavigator(BotImpl bot, IBaritone baritone) {
         this.bot = bot;
@@ -57,7 +54,6 @@ public final class BaritoneNavigator implements BotNavigator {
         if (b == null) {
             return this;
         }
-        recordStartRotation();
         // 替换旧任务：清掉所有进程（含 follow/mine），路径段也取消
         b.getPathingBehavior().cancelEverything();
         if (goal instanceof NavigationGoal.BlockGoal g) {
@@ -168,7 +164,6 @@ public final class BaritoneNavigator implements BotNavigator {
         if (b == null) {
             return this;
         }
-        recordStartRotation();
         b.getPathingBehavior().cancelEverything();
         net.minecraft.world.level.block.state.BlockState state = this.bot.getBlockState(target);
         b.getMineProcess().mine(1, new BlockOptionalMetaLookup(state.getBlock()));
@@ -184,7 +179,6 @@ public final class BaritoneNavigator implements BotNavigator {
         if (b == null) {
             return this;
         }
-        recordStartRotation();
         b.getPathingBehavior().cancelEverything();
         b.getMineProcess().mine(1, new BlockOptionalMetaLookup(blockId));
         this.task = NavigatorTask.MINE;
@@ -215,26 +209,7 @@ public final class BaritoneNavigator implements BotNavigator {
             };
         }
         if (!active) {
-            this.restoreStartRotation();
             this.resetTask();
-        }
-    }
-
-    /** 记录任务开始时的假人朝向（任务结束恢复用）。 */
-    private void recordStartRotation() {
-        net.minecraft.client.player.LocalPlayer player = this.bot.getLocalPlayer();
-        if (player != null) {
-            this.startYaw = player.getYRot();
-            this.startPitch = player.getXRot();
-        }
-    }
-
-    /** 任务结束恢复任务前朝向（baritone 寻路中 movement 每 tick 面向移动方向，完成时不留下改动的朝向）。 */
-    private void restoreStartRotation() {
-        net.minecraft.client.player.LocalPlayer player = this.bot.getLocalPlayer();
-        if (player != null) {
-            player.setYRot(this.startYaw);
-            player.setXRot(this.startPitch);
         }
     }
 }
