@@ -62,10 +62,6 @@ public final class MineProcess extends BaritoneProcessHelper implements IMinePro
     private GoalRunAway branchPointRunaway;
     private int desiredQuantity;
     private int tickCount;
-    /** 掉落物扫描结果任务级锁定：客户端模拟的 ItemEntity 位置会漂移抖动，
-     *  每 tick 追最新位置会让 goal 频繁变化 → 路径反复重算 → 假人走走停停；
-     *  服务端位置稳定，捡取按服务端判定，锁定首次位置即可（onLostControl 清空）。 */
-    private List<BlockPos> droppedScanCache = java.util.Collections.emptyList();
 
     public MineProcess(Baritone baritone) {
         super(baritone);
@@ -172,7 +168,6 @@ public final class MineProcess extends BaritoneProcessHelper implements IMinePro
     @Override
     public void onLostControl() {
         mine(0, (BlockOptionalMetaLookup) null);
-        this.droppedScanCache = java.util.Collections.emptyList();
     }
 
     @Override
@@ -193,23 +188,21 @@ public final class MineProcess extends BaritoneProcessHelper implements IMinePro
             // （原版首 tick knownOreLocations 为空直接取消，掉落物永远没机会进目标）
             List<BlockPos> dropped = droppedItemsScan();
             if (!dropped.isEmpty()) {
-                // 直接采用（掉落物已过 filter 匹配；不在此处建 CalculationContext——
-                // 每 tick 构建 BSI 开销大，会让假人寻路走走停停）
+                // 直接采用实时扫描结果（掉落物已过 filter 匹配）；每 tick 重扫
+                // （原版语义）：捡走/消失后目标自然失效，不会卡在旧位置
                 knownOreLocations = dropped;
                 locs = dropped;
             }
         }
         if (!locs.isEmpty()) {
-            if (locs.equals(this.droppedScanCache)) {
-                // 纯掉落物目标：直接生成 GoalNear（跳过 prune/CalculationContext——
-                // 每 tick 构建 BSI 开销大，会让假人寻路走走停停）
-                Goal goal = new GoalComposite(locs.stream()
-                        .map(loc -> (Goal) new GoalNear(loc, 1)).toArray(Goal[]::new));
-                return new PathingCommand(goal, PathingCommandType.SET_GOAL_AND_PATH);
-            }
             CalculationContext context = new CalculationContext(baritone);
             List<BlockPos> dropped = droppedItemsScan();
             List<BlockPos> locs2 = prune(context, new ArrayList<>(locs), filter, settings().mineMaxOreLocationsCount.value, blacklist, dropped);
+            if (locs2.isEmpty()) {
+                // 全部目标失效（掉落物被捡走/方块已挖）：交 rescan 权威判定
+                // （扫空 + 区块已加载 → 取消反馈），不生成空 goal 挂住任务
+                return null;
+            }
             // can't reassign locs, gotta make a new var locs2, because we use it in a lambda right here, and variables you use in a lambda must be effectively final
             // 掉落物位置：coalesce 会生成「站进空气格」的不可达目标（掉落物在空气里）。
             // 用 GoalNear(半径 0) 精确站到掉落物所在格——MC 拾取要求玩家与物品 AABB 相交，
@@ -363,12 +356,9 @@ public final class MineProcess extends BaritoneProcessHelper implements IMinePro
     }
 
     public List<BlockPos> droppedItemsScan() {
-        if (!this.droppedScanCache.isEmpty()) {
-            return this.droppedScanCache;
-        }
-        List<BlockPos> ret = scanDroppedItems();
-        this.droppedScanCache = ret;
-        return ret;
+        // 实时扫描（原版语义，不做缓存）：掉落物被捡走/消失后目标立即失效，
+        // 缓存的「位置锁定」会让任务在捡完后永久挂住（生产实测新 bug）
+        return scanDroppedItems();
     }
 
     private List<BlockPos> scanDroppedItems() {
