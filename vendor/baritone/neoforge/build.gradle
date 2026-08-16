@@ -15,9 +15,6 @@
  * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import baritone.gradle.task.CreateDistTask
-import baritone.gradle.task.ProguardTask
-
 plugins {
     id "com.github.johnrengelman.shadow" version "8.0.0"
 }
@@ -103,17 +100,6 @@ components.java {
         skip()
     }
 }
-
-task proguard(type: ProguardTask) {
-    proguardVersion "7.9.1"
-    compType "neoforge"
-}
-
-task createDist(type: CreateDistTask, dependsOn: proguard) {
-    compType "neoforge"
-}
-
-build.finalizedBy(createDist)
 
 publishing {
     publications {
