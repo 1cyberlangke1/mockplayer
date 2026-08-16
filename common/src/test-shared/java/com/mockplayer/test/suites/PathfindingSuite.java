@@ -14,6 +14,8 @@ import com.mockplayer.baritone.api.BaritoneAPI;
 import com.mockplayer.baritone.api.IBaritone;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.npc.villager.Villager;
 
 /**
  * pathfinding：假人寻路接线硬测试（不测寻路质量，只测
@@ -41,6 +43,7 @@ public class PathfindingSuite extends TestSuite {
         test("elytra API 接线", this::elytraApiWiring);
         test("销毁清理", this::destroyCleanup);
         test("API 全方法接线", this::apiAllMethodsWiring);
+        test("命令层 mode/elytra/mine/follow", this::commandLayerWiring);
     }
 
     /** 测试 1：goTo 端到端——位移 > 2 格 + 最终水平距离 < 3 格。 */
@@ -264,6 +267,78 @@ public class PathfindingSuite extends TestSuite {
             ctx.checkNow("all cleared after stops", nav.currentTask() == NavigatorTask.NONE
                     && nav.currentGoal().isEmpty());
         });
+    }
+
+    /** 测试 7：命令层接线——/control mode/elytra/mine/follow 执行后任务状态正确。 */
+    private void commandLayerWiring(TestContext ctx) {
+        ctx.run(() -> SuitesSupport.createBot(ctx, BOT_A));
+        ctx.await("lifecycle PLAYING", () -> ctx.bot() != null
+                && ctx.bot().getLifecycle() == BotLifecycle.PLAYING, 300);
+        SuitesSupport.awaitChunkLoaded(ctx);
+        // 服务端放一个 NoAI 村民供 follow 命令使用（经包同步到假人客户端 level）
+        ctx.run(() -> ctx.server().execute(() -> {
+            ServerPlayer sp = ctx.server().getPlayerList().getPlayerByName(BOT_A);
+            if (sp != null) {
+                ctx.server().getCommands().performPrefixedCommand(
+                        ctx.server().createCommandSourceStack(),
+                        String.format("summon minecraft:villager %.2f %.2f %.2f {NoAI:1b}",
+                                sp.getX() + 2.0, sp.getY(), sp.getZ()));
+            }
+        }));
+        ctx.await("villager near", () -> ctx.bot() != null
+                && ctx.bot().getEntitiesNear(16).stream().anyMatch(e -> e instanceof Villager), 200);
+        ctx.run(() -> {
+            BlockPos base = ctx.bot().getLocalPlayer().blockPosition();
+            // mode：walk/elytra 切换（不启动任务，仅验证命令可执行）
+            ctx.checkNow("mode elytra ok", ctx.platform().executeClientCommand(
+                    "control " + BOT_A + " mode elytra"));
+            ctx.checkNow("mode walk ok", ctx.platform().executeClientCommand(
+                    "control " + BOT_A + " mode walk"));
+            // mode elytra 后 goto：走鞘翅进程（模式生效验证）
+            ctx.checkNow("mode elytra again", ctx.platform().executeClientCommand(
+                    "control " + BOT_A + " mode elytra"));
+            BlockPos far = base.offset(30, 0, 30);
+            ctx.checkNow("goto after mode elytra ok", ctx.platform().executeClientCommand(
+                    "control " + BOT_A + " goto " + far.getX() + " " + far.getY() + " " + far.getZ()));
+            ctx.checkNow("goto uses elytra process", ctx.bot() instanceof BotImpl impl
+                    && impl.session().getBaritone() != null
+                    && impl.session().getBaritone().getElytraProcess().currentDestination() != null);
+            ctx.bot().navigate().stop();
+            // mode 非法值：fail 反馈不抛异常，不打断现有任务
+            ctx.checkNow("mode invalid no throw", ctx.platform().executeClientCommand(
+                    "control " + BOT_A + " mode fly"));
+            ctx.checkNow("mode invalid keeps task state",
+                    ctx.bot().navigate().currentTask() == NavigatorTask.NONE);
+            // elytra：任务注册 + stop 复位（不真飞）
+            BlockPos target = base.offset(5, 0, 5);
+            ctx.checkNow("elytra command ok", ctx.platform().executeClientCommand(
+                    "control " + BOT_A + " elytra " + target.getX() + " " + target.getY() + " " + target.getZ()));
+            ctx.checkNow("elytra task via command",
+                    ctx.bot().navigate().currentTask() == NavigatorTask.ELYTRA);
+            ctx.bot().navigate().stop();
+            ctx.checkNow("elytra stopped", !ctx.bot().navigate().isActive());
+            // mine：任务注册 + stop 复位（不真挖完）
+            BlockPos below = base.below();
+            ctx.checkNow("mine command ok", ctx.platform().executeClientCommand(
+                    "control " + BOT_A + " mine " + below.getX() + " " + below.getY() + " " + below.getZ()));
+            ctx.checkNow("mine task via command",
+                    ctx.bot().navigate().currentTask() == NavigatorTask.MINE);
+            ctx.bot().navigate().stop();
+            ctx.checkNow("mine stopped", !ctx.bot().navigate().isActive());
+            // follow：跟随附近村民；未知类型走失败反馈
+            ctx.checkNow("follow command ok", ctx.platform().executeClientCommand(
+                    "control " + BOT_A + " follow villager"));
+            ctx.checkNow("follow task via command",
+                    ctx.bot().navigate().currentTask() == NavigatorTask.FOLLOW);
+            ctx.bot().navigate().stop();
+            ctx.checkNow("follow stopped", !ctx.bot().navigate().isActive());
+            // follow 未知类型：fail 反馈不打断现有任务
+            ctx.checkNow("follow unknown no throw", ctx.platform().executeClientCommand(
+                    "control " + BOT_A + " follow nonexistent"));
+            ctx.checkNow("follow unknown keeps task state",
+                    ctx.bot().navigate().currentTask() == NavigatorTask.NONE);
+        });
+        ctx.run(() -> MockplayerApi.bots().removeBot(BOT_A, "command"));
     }
 
     /** 假人相对起点（startPos）的水平位移。 */

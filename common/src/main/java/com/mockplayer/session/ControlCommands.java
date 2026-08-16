@@ -3,6 +3,7 @@ package com.mockplayer.session;
 import com.mockplayer.api.Bot;
 import com.mockplayer.api.BotLifecycle;
 import com.mockplayer.api.container.BotContainer;
+import com.mockplayer.api.navigate.NavigationMode;
 
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.FloatArgumentType;
@@ -360,6 +361,20 @@ public class ControlCommands {
                     ctx -> goNear(name(ctx), i(ctx, "x"), i(ctx, "z"), i(ctx, "radius"))),
             spec("pathstop", variants(v()),
                     ctx -> pathStop(name(ctx))),
+            spec("mode", variants(v(word("mode", CommandSupport.fixed("walk", "elytra")))),
+                    ctx -> modeCmd(name(ctx), str(ctx, "mode"))),
+            spec("elytra", variants(v(
+                            integer("x", CommandSupport.coordX("commands.mockplayer.control.suggest.x")),
+                            integer("y", CommandSupport.coordY("commands.mockplayer.control.suggest.y")),
+                            integer("z", CommandSupport.coordZ("commands.mockplayer.control.suggest.z")))),
+                    ctx -> elytraCmd(name(ctx), i(ctx, "x"), i(ctx, "y"), i(ctx, "z"))),
+            spec("mine", variants(v(
+                            integer("x", CommandSupport.coordX("commands.mockplayer.control.suggest.x")),
+                            integer("y", CommandSupport.coordY("commands.mockplayer.control.suggest.y")),
+                            integer("z", CommandSupport.coordZ("commands.mockplayer.control.suggest.z")))),
+                    ctx -> mineCmd(name(ctx), i(ctx, "x"), i(ctx, "y"), i(ctx, "z"))),
+            spec("follow", variants(v(word("target", entityTypes()))),
+                    ctx -> followCmd(name(ctx), str(ctx, "target"))),
             spec("config", variants(
                             v(word("mode", CommandSupport.fixed("list", "set", "reset"))),
                             v(word("mode", CommandSupport.fixed("set")),
@@ -434,6 +449,80 @@ public class ControlCommands {
         }
         findBot(name).navigate().stop();
         return success("pathstop", name);
+    }
+
+    /** /control mode：切换移动方式（WALK/ELYTRA；后续 goto 按模式分流）。 */
+    private static Component modeCmd(String name, String mode) {
+        Component blocked = requirePlaying(name);
+        if (blocked != null) {
+            return blocked;
+        }
+        Bot bot = findBot(name);
+        Component disabled = navigateDisabled(bot);
+        if (disabled != null) {
+            return disabled;
+        }
+        NavigationMode m;
+        if ("elytra".equalsIgnoreCase(mode)) {
+            m = NavigationMode.ELYTRA;
+        } else if ("walk".equalsIgnoreCase(mode)) {
+            m = NavigationMode.WALK;
+        } else {
+            return fail("commands.mockplayer.control.mode.invalid", mode);
+        }
+        bot.navigate().mode(m);
+        return success("mode", name);
+    }
+
+    /** /control elytra：鞘翅飞往坐标（需要假人装备鞘翅）。 */
+    private static Component elytraCmd(String name, int x, int y, int z) {
+        Component blocked = requirePlaying(name);
+        if (blocked != null) {
+            return blocked;
+        }
+        Bot bot = findBot(name);
+        Component disabled = navigateDisabled(bot);
+        if (disabled != null) {
+            return disabled;
+        }
+        bot.navigate().elytra(new BlockPos(x, y, z));
+        return success("elytra", name);
+    }
+
+    /** /control mine：挖指定方块（Baritone MineProcess：寻路+选工具+挖掘+拾取一条龙）。 */
+    private static Component mineCmd(String name, int x, int y, int z) {
+        Component blocked = requirePlaying(name);
+        if (blocked != null) {
+            return blocked;
+        }
+        Bot bot = findBot(name);
+        Component disabled = navigateDisabled(bot);
+        if (disabled != null) {
+            return disabled;
+        }
+        bot.navigate().mine(new BlockPos(x, y, z));
+        return success("mine", name);
+    }
+
+    /** /control follow：跟随附近指定类型实体（取最近的匹配实体）。 */
+    private static Component followCmd(String name, String target) {
+        Component blocked = requirePlaying(name);
+        if (blocked != null) {
+            return blocked;
+        }
+        Bot bot = findBot(name);
+        Component disabled = navigateDisabled(bot);
+        if (disabled != null) {
+            return disabled;
+        }
+        Entity entity = bot.getEntitiesNear(16.0).stream()
+                .filter(e -> entityTypeKey(e).equalsIgnoreCase(target))
+                .findFirst().orElse(null);
+        if (entity == null) {
+            return fail("commands.mockplayer.control.follow.not_found", target, playerName(name));
+        }
+        bot.navigate().follow(entity);
+        return success("follow", name);
     }
 
     /** /control config list|set|reset：per-bot 寻路行为配置（渲染三态全局，不走命令）。 */
@@ -1120,12 +1209,16 @@ public class ControlCommands {
                 return builder.buildFuture();
             }
             List<String> typeIds = bot.getEntitiesNear(16.0).stream()
-                    .map(e -> net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE
-                            .getKey(e.getType()).getPath())
+                    .map(ControlCommands::entityTypeKey)
                     .distinct()
                     .toList();
             return SharedSuggestionProvider.suggest(typeIds, builder);
         };
+    }
+
+    /** 实体类型路径 id（villager / minecart 等，语言无关；与补全共用防漂移）。 */
+    public static String entityTypeKey(Entity e) {
+        return BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).getPath();
     }
 
     /** 偏航角补全（只建议当前 yaw，tooltip 标明语义）。 */
