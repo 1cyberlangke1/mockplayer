@@ -30,25 +30,29 @@ tasks.wrapper {
 // 显式 inputJar（README 的 "automatic detection fails" 备选）：本仓库 build/libs 常年堆积
 // 多版本产物 + 最新时间戳的 sources/javadoc，自动检测的时间惩罚（毫秒×0.15）会让
 // 刚生成的 sources jar 反超主 jar（实测挑中 neoforge 的 -sources.jar，合并产物丢 @Mod 入口）。
-// inputJar 用 provider 延迟解析：forgix 块在根项目 afterEvaluate 执行时子项目还没评估（父先子后），
-// 直接 tasks.jar 会炸；provider 到 mergeJars 执行时才解析，且保留显式指定。
+// 26.x 全反混淆：双端生产 jar 都是 jar 任务（fabric Loom 无 remapJar，include 直接在 jar 里；
+// neoforge ModDevGradle 自动 reobf + jarJar）。jar 产物含 baritone 嵌套：
+// fabric META-INF/jars/、neoforge META-INF/jarjar/。
+// inputJar 给文件路径，mergeJars 的 dependsOn 保证执行前产物已生成。
 forgix {
     autoRun = true
     // 产物名带 MC 版本（tag 是仓库级共享空间，多 MC 版本分支并存时靠文件名区分）
     // → mockplayer-26.2-0.2.2-fabric-neoforge.jar
     archiveVersion = "${minecraft_version}-${version}"
     fabric {
-        inputJar = project.provider { project(':fabric').tasks.jar.archiveFile.get() }
+        inputJar = rootProject.file(
+                "fabric/build/libs/mockplayer-fabric-${minecraft_version}-${version}.jar")
     }
     neoforge {
-        inputJar = project.provider { project(':neoforge').tasks.jar.archiveFile.get() }
+        inputJar = rootProject.file(
+                "neoforge/build/libs/mockplayer-neoforge-${minecraft_version}-${version}.jar")
     }
 }
 
-// provider 包装会丢失 builtBy 任务依赖（mergeJars 不知道要先构建 jar），手动补上。
-// projectsEvaluated 时所有子项目已评估完，访问任务安全。
+// inputJar 是文件路径，mergeJars 不知道要先构建 jar，手动补依赖。
+// 用字符串路径（延迟解析），避免配置期访问子项目任务。
 gradle.projectsEvaluated {
     rootProject.tasks.named('mergeJars').configure {
-        dependsOn project(':fabric').tasks.jar, project(':neoforge').tasks.jar
+        dependsOn ':fabric:jar', ':neoforge:jar'
     }
 }
