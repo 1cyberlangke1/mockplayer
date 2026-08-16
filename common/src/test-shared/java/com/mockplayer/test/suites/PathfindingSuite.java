@@ -94,7 +94,17 @@ public class PathfindingSuite extends TestSuite {
                 .is(net.minecraft.world.item.Items.ELYTRA)
                 && ctx.bot().getLocalPlayer().getInventory()
                 .countItem(net.minecraft.world.item.Items.FIREWORK_ROCKET) >= 1, 200);
-        // 把假人放到高空起飞点（平台方向的起点上空 +45）
+        // 生产场景模拟（2026-08-17 生产实测崩溃复现）：假人站在地面（y=4），
+        // /control elytra 远处平台中心——生产日志显示命令后第一次 pathFindAsync
+        // （native pathFind）立即 0x20474343 崩溃。此处必须在进程不崩的前提下
+        // 走完 native 调用窗口（pathFind timeout 10000ms = 200 ticks），
+        // 走到断言即证明 native 防御生效（原实现 C++ 异常逃逸直接杀 JVM）。
+        ctx.run(() -> ctx.platform().executeClientCommand("control " + BOT_A + " elytra 405 54 405"));
+        ctx.run(() -> this.waitTicks = 0);
+        ctx.await("elytra ground-start native window (300 ticks)", () -> ++this.waitTicks >= 300, 400);
+        ctx.check("elytra ground-start did not crash jvm", () -> true);
+        ctx.run(() -> ctx.bot().navigate().stop());
+        // 高空起飞真飞（功能验证）：tp 到平台方向的起点上空 +45，开鞘翅后飞往平台
         ctx.run(() -> ctx.server().execute(() -> {
             ctx.server().getCommands().performPrefixedCommand(
                     ctx.server().createCommandSourceStack(), "tp " + BOT_A + " 100 49 100");
@@ -102,7 +112,6 @@ public class PathfindingSuite extends TestSuite {
         ctx.await("bot in air", () -> ctx.bot() != null
                 && ctx.bot().getLocalPlayer() != null
                 && ctx.bot().getLocalPlayer().getY() > 40, 300);
-        // 模拟原版双击跳跃开鞘翅：flag + START_FALL_FLYING 包（服务端验证鞘翅装备）
         ctx.run(() -> {
             net.minecraft.client.player.LocalPlayer lp = ctx.bot().getLocalPlayer();
             if (lp.tryToStartFallFlying()) {
@@ -113,9 +122,15 @@ public class PathfindingSuite extends TestSuite {
         ctx.await("fall flying active", () -> ctx.bot() != null
                 && ctx.bot().getLocalPlayer() != null
                 && ctx.bot().getLocalPlayer().isFallFlying(), 100);
-        // 飞往平台中心 (405, 54, 405)——真实触发 native 寻路 + 烟花导航
         ctx.run(() -> ctx.platform().executeClientCommand("control " + BOT_A + " elytra 405 54 405"));
-        // 长超时：接近平台（水平 < 10 且垂直差 < 25）或任务完成（到达/放弃）
+        // 飞行中间证据：假人必须自主离开起点 100+ 格（水平位移）——排除「瞬移/原地
+        // 不动/坠落没飞」：坠落滑翔落点离起点最多 ~200 格、行走 300 格需 ~70s 且
+        // 平台在 50 格高空无法步行到达，唯一到达路径是真正滑翔飞行
+        ctx.await("elytra flew away from start (>100 blocks)", () -> ctx.bot() != null
+                && ctx.bot().getLocalPlayer() != null
+                && Math.hypot(ctx.bot().getLocalPlayer().getX() - 100,
+                ctx.bot().getLocalPlayer().getZ() - 100) > 100, 4800);
+        // 长超时：接近平台（水平 < 8 且垂直差 < 12，平台高度 54）或任务完成（到达/放弃）
         ctx.await("elytra reached platform", () -> ctx.bot() != null
                 && ctx.bot().getLocalPlayer() != null
                 && (nearPlatform(ctx, 400, 54, 400)
@@ -123,17 +138,21 @@ public class PathfindingSuite extends TestSuite {
         ctx.check("elytra actually near platform", () -> ctx.bot() != null
                 && ctx.bot().getLocalPlayer() != null
                 && nearPlatform(ctx, 400, 54, 400));
+        // 到达高度硬证据：假人 y 必须在平台高度附近（≥40）——不是在地面（y=4）蒙混过关
+        ctx.check("elytra reached platform altitude (y>=40)", () -> ctx.bot() != null
+                && ctx.bot().getLocalPlayer() != null
+                && ctx.bot().getLocalPlayer().getY() >= 40);
         ctx.run(() -> ctx.bot().navigate().stop());
         ctx.run(() -> MockplayerApi.bots().removeBot(BOT_A, "test"));
     }
 
-    /** 假人是否在平台附近（水平 < 10 且垂直差 < 25）。 */
+    /** 假人是否在平台附近（水平 < 8 且垂直差 < 12；平台 10×10 中心 (px+4.5, py, pz+4.5)）。 */
     private static boolean nearPlatform(TestContext ctx, int px, int py, int pz) {
         net.minecraft.client.player.LocalPlayer lp = ctx.bot().getLocalPlayer();
         double dx = lp.getX() - (px + 4.5);
         double dz = lp.getZ() - (pz + 4.5);
         double dy = lp.getY() - py;
-        return Math.sqrt(dx * dx + dz * dz) < 10 && Math.abs(dy) < 25;
+        return Math.sqrt(dx * dx + dz * dz) < 8 && Math.abs(dy) < 12;
     }
 
     /** 测试 13：baritone 配置界面（YACL 反射桥可构造）+ 全局 Settings → 新假人

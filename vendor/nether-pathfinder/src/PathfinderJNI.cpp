@@ -213,46 +213,54 @@ extern "C" {
     }
 
     EXPORT jobject JNICALL Java_dev_babbaj_pathfinder_NetherPathfinder_pathFind(JNIEnv* env, jclass, Context* ctx, jint x1, jint y1, jint z1, jint x2, jint y2, jint z2, jboolean x4Min, jboolean refineResult, jint timeoutMs, jboolean airIfFake, jdouble fakeChunkCost) {
-        if (!inBounds(y1) || !inBounds(y2)) {
-            throwException(env, "Invalid y1 or y2");
+        try {
+            if (!inBounds(y1) || !inBounds(y2)) {
+                throwException(env, "Invalid y1 or y2");
+                return nullptr;
+            }
+            ctx->cancelFlag.clear();
+            const auto start = x4Min ? findAir<Size::X4>(*ctx, {x1, y1, z1}, airIfFake)
+                                     : findAir<Size::X2>(*ctx, {x1, y1, z1}, airIfFake);
+            const auto goal = x4Min ? findAir<Size::X4>(*ctx, {x2, y2, z2}, airIfFake)
+                                    : findAir<Size::X2>(*ctx, {x2, y2, z2}, airIfFake);
+            if (!start || !goal) {
+                // 防御（mockplayer P15）：起点/终点找不到空气节点 → 返回 null（Java 侧
+                // pathFindAsync 对 null 抛 PathCalculationException，baritone 优雅显示
+                // path_failed）。原实现 findAir 内部 exit(1) 直接杀 JVM，绝不允许。
+                return nullptr;
+            }
+            std::optional<Path> path = findPathSegment(*ctx, *start, *goal, x4Min, timeoutMs, airIfFake, fakeChunkCost);
+            if (!path) return nullptr;
+
+            std::vector<jlong> packed;
+            if (refineResult) {
+                auto refined = refine(*ctx, path->blocks);
+                packed.reserve(refined.size());
+                std::transform(refined.begin(), refined.end(), std::back_inserter(packed), packBlockPos);
+            } else {
+                packed.reserve(path->blocks.size());
+                std::transform(path->blocks.begin(), path->blocks.end(), std::back_inserter(packed), packBlockPos);
+            }
+
+            const auto len = (jint) packed.size();
+            jlongArray array = env->NewLongArray(len);
+            env->SetLongArrayRegion(array, 0, len, packed.data());
+
+            jobject object = env->NewObject(
+                    state.pathSegmentClass,
+                    state.pathSegmentCtor,
+                    // args
+                    path->type == Path::Type::FINISHED,
+                    array
+            );
+            return object;
+        } catch (...) {
+            // 终极防御（mockplayer P15）：任何 C++ 异常（如堆/迭代器/容器操作、
+            // std::bad_alloc）一律不逃逸 JNI 边界——逃逸会导致 mingw 异常经 SEH
+            // RaiseException → JVM Internal Error 0x20474343 崩溃。返回 null →
+            // Java 侧 PathCalculationException 优雅失败。
             return nullptr;
         }
-        ctx->cancelFlag.clear();
-        const auto start = x4Min ? findAir<Size::X4>(*ctx, {x1, y1, z1}, airIfFake)
-                                 : findAir<Size::X2>(*ctx, {x1, y1, z1}, airIfFake);
-        const auto goal = x4Min ? findAir<Size::X4>(*ctx, {x2, y2, z2}, airIfFake)
-                                : findAir<Size::X2>(*ctx, {x2, y2, z2}, airIfFake);
-        if (!start || !goal) {
-            // 防御（mockplayer P15）：起点/终点找不到空气节点 → 返回 null（Java 侧
-            // pathFindAsync 对 null 抛 PathCalculationException，baritone 优雅显示
-            // path_failed）。原实现 findAir 内部 exit(1) 直接杀 JVM，绝不允许。
-            return nullptr;
-        }
-        std::optional<Path> path = findPathSegment(*ctx, *start, *goal, x4Min, timeoutMs, airIfFake, fakeChunkCost);
-        if (!path) return nullptr;
-
-        std::vector<jlong> packed;
-        if (refineResult) {
-            auto refined = refine(*ctx, path->blocks);
-            packed.reserve(refined.size());
-            std::transform(refined.begin(), refined.end(), std::back_inserter(packed), packBlockPos);
-        } else {
-            packed.reserve(path->blocks.size());
-            std::transform(path->blocks.begin(), path->blocks.end(), std::back_inserter(packed), packBlockPos);
-        }
-
-        const auto len = (jint) packed.size();
-        jlongArray array = env->NewLongArray(len);
-        env->SetLongArrayRegion(array, 0, len, packed.data());
-
-        jobject object = env->NewObject(
-            state.pathSegmentClass,
-            state.pathSegmentCtor,
-            // args
-            path->type == Path::Type::FINISHED,
-            array
-        );
-        return object;
     }
 
     EXPORT jboolean JNICALL Java_dev_babbaj_pathfinder_NetherPathfinder_cancel(JNIEnv* env, jclass clazz, Context* ctx) {

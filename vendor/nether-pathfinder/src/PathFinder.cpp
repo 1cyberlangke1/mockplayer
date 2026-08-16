@@ -328,6 +328,10 @@ std::optional<Path> findPathSegment(Context& ctx, const NodePos& start, const No
         }
 
         PathNode* currentNode = openSet.removeLowest();
+        if (currentNode == nullptr) {
+            // 防御（mockplayer P15）：空堆防御返回 nullptr 时终止 A*（返回最优解）
+            break;
+        }
 
         if (inGoal(currentNode->pos, goal.absolutePosCenter())) {
             if (VERBOSE) {
