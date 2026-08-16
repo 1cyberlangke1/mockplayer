@@ -189,7 +189,10 @@ jobs:
           jar=$(ls np-jar/*.jar | head -n1)
           mkdir -p smoke-out
           javac -encoding UTF-8 -cp "$jar" -d smoke-out scripts/native-smoke/NativeSmoke.java
-          java -cp "smoke-out:$jar" NativeSmoke
+          # classpath 分隔符：Windows 用 ';'，Linux/macOS 用 ':'
+          CP_SEP=":"
+          [ "$RUNNER_OS" = "Windows" ] && CP_SEP=";"
+          java -cp "smoke-out${CP_SEP}${jar}" NativeSmoke
 
   # 运行验证：xvfb 虚拟显示 + Mesa 软件渲染启动 Minecraft 客户端，
   # 用 mocktest 套件验证 merged jar 在 Fabric / NeoForge 双端真实可跑（公开仓库 Actions 无限额度）
@@ -230,6 +233,13 @@ jobs:
 
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
+
+      # nether-pathfinder jar 由 build job 构建（zig 6 平台），test-merged 直接下载复用
+      - name: Download nether-pathfinder jar
+        uses: actions/download-artifact@v7
+        with:
+          name: nether-pathfinder-jar
+          path: vendor/nether-pathfinder/build/libs
 
       - name: Build vendored Baritone
         run: |
