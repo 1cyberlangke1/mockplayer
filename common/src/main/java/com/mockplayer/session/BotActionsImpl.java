@@ -257,9 +257,9 @@ public class BotActionsImpl implements BotActions {
         if (player == null) {
             return;
         }
-        // 寻路互斥（2026-08-16）：Baritone 激活时已把假人 input 替换为
-        // PlayerMovementInput（InputOverrideHandler），移动/跳跃/潜行/疾跑由
-        // Baritone 每 tick 计算；这里完全让位（含持续攻击/挖掘/长按连点，
+        // 寻路互斥（2026-08-16）：Baritone 激活时 InputOverrideHandler 直写假人
+        // input（moveVector/keyPresses，不替换 input 对象），移动/跳跃/潜行/疾跑
+        // 由 Baritone 每 tick 计算；这里完全让位（含持续攻击/挖掘/长按连点，
         // 避免与 Baritone 的 CLICK_LEFT/CLICK_RIGHT 强制输入打架），
         // 只保留原版节流递减（missTime/rightClickDelay），一次性动作由命令
         // 显式调用不受影响。

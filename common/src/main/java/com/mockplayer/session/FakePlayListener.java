@@ -320,8 +320,8 @@ public class FakePlayListener extends ClientPacketListener {
         this.session.setFakePlayer(this.fakePlayer);
         this.session.setPlayListener(this);
         // 5. 假人专属 Baritone 实例：绑定假人 player/gameMode（隔离铁律：交互走假人
-        //    gameMode，不碰主玩家）；tick 由 Baritone 全局 mixin 自动驱动（MixinMinecraft
-        //    广播 TickEvent + MixinClientPlayerEntity 按玩家匹配 PlayerUpdateEvent）
+        //    gameMode，不碰主玩家）；事件由 FakeSession.tick 手动喂（激进改造：
+        //    不依赖 Baritone 全局 mixin，时序对齐官方 Minecraft.tick）
         com.mockplayer.baritone.api.IBaritone botBaritone = com.mockplayer.baritone.api.BaritoneAPI.getProvider()
                 .createBaritone(mc, this.fakePlayer, this.fakeGameMode);
         this.session.setBaritone(botBaritone);

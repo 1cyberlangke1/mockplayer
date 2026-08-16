@@ -83,6 +83,19 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
         this.inputForceStateMap.clear();
     }
 
+    /** 写空输入（stop 后清残留 moveVector/keyPresses；主项目 stop 路径调用）。 */
+    public void clearInput() {
+        ClientInput input = ctx.player().input;
+        if (input == null) {
+            return;
+        }
+        com.mockplayer.baritone.utils.accessor.IClientInputAccessor accessor =
+                (com.mockplayer.baritone.utils.accessor.IClientInputAccessor) input;
+        accessor.baritone$setMoveVector(new Vec2(0.0F, 0.0F));
+        accessor.baritone$setKeyPresses(new net.minecraft.world.entity.player.Input(
+                false, false, false, false, false, false, false));
+    }
+
     @Override
     public final void onTick(TickEvent event) {
         if (event.getType() == TickEvent.Type.OUT) {
