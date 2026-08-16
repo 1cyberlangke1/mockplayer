@@ -17,6 +17,7 @@
 
 package com.mockplayer.baritone.pathing.movement;
 
+import net.minecraft.network.chat.Component;
 import com.mockplayer.baritone.Baritone;
 import com.mockplayer.baritone.api.Settings;
 import com.mockplayer.baritone.api.BaritoneAPI;
@@ -804,7 +805,7 @@ public interface MovementHelper extends ActionCosts, Helper {
             BlockPos against1 = placeAt.relative(HORIZONTALS_BUT_ALSO_DOWN_____SO_EVERY_DIRECTION_EXCEPT_UP[i]);
             if (MovementHelper.canPlaceAgainst(ctx, against1)) {
                 if (!((Baritone) baritone).getInventoryBehavior().selectThrowawayForLocation(false, placeAt.getX(), placeAt.getY(), placeAt.getZ())) { // get ready to place a throwaway block
-                    Helper.HELPER.logDebug("bb pls get me some blocks. dirt, netherrack, cobble");
+                    Helper.HELPER.logDebug(Component.translatableEscape("baritone.log.misc.need_blocks"));
                     state.setStatus(MovementStatus.UNREACHABLE);
                     return PlaceResult.NO_OPTION;
                 }

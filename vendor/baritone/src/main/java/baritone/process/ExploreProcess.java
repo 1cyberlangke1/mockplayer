@@ -17,6 +17,7 @@
 
 package com.mockplayer.baritone.process;
 
+import net.minecraft.network.chat.Component;
 import com.mockplayer.baritone.Baritone;
 import com.mockplayer.baritone.api.Settings;
 import com.mockplayer.baritone.api.cache.ICachedWorld;
@@ -82,25 +83,25 @@ public final class ExploreProcess extends BaritoneProcessHelper implements IExpl
     @Override
     public PathingCommand onTick(boolean calcFailed, boolean isSafeToCancel) {
         if (calcFailed) {
-            logDirect("Failed");
+            logDirect(Component.translatableEscape("baritone.log.explore.failed"));
             if (settings().notificationOnExploreFinished.value) {
-                logNotification("Exploration failed", true);
+                logNotification(Component.translatableEscape("baritone.log.explore.failed_notify"), true);
             }
             onLostControl();
             return null;
         }
         IChunkFilter filter = calcFilter();
         if (!settings().disableCompletionCheck.value && filter.countRemain() == 0) {
-            logDirect("Explored all chunks");
+            logDirect(Component.translatableEscape("baritone.log.explore.done"));
             if (settings().notificationOnExploreFinished.value) {
-                logNotification("Explored all chunks", false);
+                logNotification(Component.translatableEscape("baritone.log.explore.done"), false);
             }
             onLostControl();
             return null;
         }
         Goal[] closestUncached = closestUncachedChunks(explorationOrigin, filter);
         if (closestUncached == null) {
-            logDebug("awaiting region load from disk");
+            logDebug(Component.translatableEscape("baritone.log.explore.await_region"));
             return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
         }
         return new PathingCommand(new GoalComposite(closestUncached), PathingCommandType.FORCE_REVALIDATE_GOAL_AND_PATH);
@@ -223,7 +224,7 @@ public final class ExploreProcess extends BaritoneProcessHelper implements IExpl
             this.invert = invert;
             Gson gson = new GsonBuilder().create();
             positions = gson.fromJson(new InputStreamReader(Files.newInputStream(path)), MyChunkPos[].class);
-            logDirect("Loaded " + positions.length + " positions");
+            logDirect(Component.translatableEscape("baritone.log.explore.loaded", positions.length));
             inFilter = new LongOpenHashSet();
             for (MyChunkPos mcp : positions) {
                 inFilter.add(ChunkPos.pack(mcp.x, mcp.z));

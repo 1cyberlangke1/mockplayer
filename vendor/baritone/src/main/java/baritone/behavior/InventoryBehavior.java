@@ -17,6 +17,7 @@
 
 package com.mockplayer.baritone.behavior;
 
+import net.minecraft.network.chat.Component;
 import com.mockplayer.baritone.Baritone;
 import com.mockplayer.baritone.api.event.events.TickEvent;
 import com.mockplayer.baritone.api.utils.Helper;
@@ -74,7 +75,7 @@ public final class InventoryBehavior extends Behavior implements Helper {
             requestSwapWithHotBar(pick, 0);
         }
         if (lastTickRequestedMove != null) {
-            logDebug("Remembering to move " + lastTickRequestedMove[0] + " " + lastTickRequestedMove[1] + " from a previous tick");
+            logDebug(Component.translatableEscape("baritone.log.inventory.remember_move", lastTickRequestedMove[0], lastTickRequestedMove[1]));
             requestSwapWithHotBar(lastTickRequestedMove[0], lastTickRequestedMove[1]);
         }
     }
@@ -113,11 +114,11 @@ public final class InventoryBehavior extends Behavior implements Helper {
     private boolean requestSwapWithHotBar(int inInventory, int inHotbar) {
         lastTickRequestedMove = new int[]{inInventory, inHotbar};
         if (ticksSinceLastInventoryMove < settings().ticksBetweenInventoryMoves.value) {
-            logDebug("Inventory move requested but delaying " + ticksSinceLastInventoryMove + " " + settings().ticksBetweenInventoryMoves.value);
+            logDebug(Component.translatableEscape("baritone.log.inventory.delay_move", ticksSinceLastInventoryMove, settings().ticksBetweenInventoryMoves.value));
             return false;
         }
         if (settings().inventoryMoveOnlyIfStationary.value && !baritone.getInventoryPauserProcess().stationaryForInventoryMove()) {
-            logDebug("Inventory move requested but delaying until stationary");
+            logDebug(Component.translatableEscape("baritone.log.inventory.delay_stationary"));
             return false;
         }
         ctx.playerController().windowClick(ctx.player().inventoryMenu.containerId, inInventory < 9 ? inInventory + 36 : inInventory, inHotbar, ContainerInput.SWAP, ctx.player());

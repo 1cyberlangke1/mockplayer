@@ -17,6 +17,7 @@
 
 package com.mockplayer.baritone.process;
 
+import net.minecraft.network.chat.Component;
 import com.mockplayer.baritone.Baritone;
 import com.mockplayer.baritone.api.BaritoneAPI;
 import com.mockplayer.baritone.api.Settings;
@@ -347,9 +348,9 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
         }
 
         if (calcFailed) {
-            logDirect("Farm failed");
+            logDirect(Component.translatableEscape("baritone.log.farm.failed"));
             if (settings().notificationOnFarmFail.value) {
-                logNotification("Farm failed", true);
+                logNotification(Component.translatableEscape("baritone.log.farm.failed"), true);
             }
             onLostControl();
             return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
@@ -393,9 +394,9 @@ public final class FarmProcess extends BaritoneProcessHelper implements IFarmPro
             }
         }
         if (goalz.isEmpty()) {
-            logDirect("Farm failed");
+            logDirect(Component.translatableEscape("baritone.log.farm.failed"));
             if (settings().notificationOnFarmFail.value) {
-                logNotification("Farm failed", true);
+                logNotification(Component.translatableEscape("baritone.log.farm.failed"), true);
             }
             onLostControl();
             return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);

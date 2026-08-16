@@ -17,6 +17,7 @@
 
 package com.mockplayer.baritone.pathing.calc;
 
+import net.minecraft.network.chat.Component;
 import com.mockplayer.baritone.Baritone;
 import com.mockplayer.baritone.api.pathing.calc.IPath;
 import com.mockplayer.baritone.api.pathing.calc.IPathFinder;
@@ -113,15 +114,15 @@ public abstract class AbstractNodeCostSearch implements IPathFinder, Helper {
             int previousLength = path.length();
             path = path.cutoffAtLoadedChunks(context.bsi);
             if (path.length() < previousLength) {
-                Helper.HELPER.logDebug("Cutting off path at edge of loaded chunks");
-                Helper.HELPER.logDebug("Length decreased by " + (previousLength - path.length()));
+                Helper.HELPER.logDebug(Component.translatableEscape("baritone.log.calc.cutoff_edge"));
+                Helper.HELPER.logDebug(Component.translatableEscape("baritone.log.calc.length_decreased", (previousLength - path.length())));
             } else {
-                Helper.HELPER.logDebug("Path ends within loaded chunks");
+                Helper.HELPER.logDebug(Component.translatableEscape("baritone.log.calc.ends_loaded"));
             }
             previousLength = path.length();
             path = path.staticCutoff(goal);
             if (path.length() < previousLength) {
-                Helper.HELPER.logDebug("Static cutoff " + previousLength + " to " + path.length());
+                Helper.HELPER.logDebug(Component.translatableEscape("baritone.log.calc.static_cutoff", previousLength, path.length()));
             }
             if (goal.isInGoal(path.getDest())) {
                 return new PathCalculationResult(PathCalculationResult.Type.SUCCESS_TO_GOAL, path);
@@ -129,7 +130,7 @@ public abstract class AbstractNodeCostSearch implements IPathFinder, Helper {
                 return new PathCalculationResult(PathCalculationResult.Type.SUCCESS_SEGMENT, path);
             }
         } catch (Exception e) {
-            Helper.HELPER.logDirect("Pathing exception: " + e);
+            Helper.HELPER.logDirect(Component.translatableEscape("baritone.log.calc.exception", e));
             e.printStackTrace();
             return new PathCalculationResult(PathCalculationResult.Type.EXCEPTION);
         } finally {
@@ -202,7 +203,7 @@ public abstract class AbstractNodeCostSearch implements IPathFinder, Helper {
             }
             if (dist > MIN_DIST_PATH * MIN_DIST_PATH) { // square the comparison since distFromStartSq is squared
                 if (logInfo) {
-                    logDebug("A* cost coefficient " + COEFFICIENTS[i]);
+                    logDebug(Component.translatableEscape("baritone.log.calc.cost_coeff", COEFFICIENTS[i]));
                 }
                 return Optional.of(new Path(realStart, startNode, bestSoFar[i], numNodes, goal, context));
             }
@@ -210,9 +211,9 @@ public abstract class AbstractNodeCostSearch implements IPathFinder, Helper {
         // instead of returning bestSoFar[0], be less misleading
         // if it actually won't find any path, don't make them think it will by rendering a dark blue that will never actually happen
         if (logInfo) {
-            logDebug("Even with a cost coefficient of " + COEFFICIENTS[COEFFICIENTS.length - 1] + ", I couldn't get more than " + Math.sqrt(bestDist) + " blocks");
-            logDebug("No path found =(");
-            logNotification("No path found =(", true);
+            logDebug(Component.translatableEscape("baritone.log.calc.cost_limit", COEFFICIENTS[COEFFICIENTS.length - 1], Math.sqrt(bestDist)));
+            logDebug(Component.translatableEscape("baritone.log.calc.no_path"));
+            logNotification(Component.translatableEscape("baritone.log.calc.no_path"), true);
         }
         return Optional.empty();
     }

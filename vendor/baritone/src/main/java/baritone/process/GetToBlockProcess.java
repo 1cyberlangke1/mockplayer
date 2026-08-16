@@ -17,6 +17,7 @@
 
 package com.mockplayer.baritone.process;
 
+import net.minecraft.network.chat.Component;
 import com.mockplayer.baritone.Baritone;
 import com.mockplayer.baritone.api.pathing.goals.*;
 import com.mockplayer.baritone.api.process.IGetToBlockProcess;
@@ -86,7 +87,7 @@ public final class GetToBlockProcess extends BaritoneProcessHelper implements IG
                     }
                 }, PathingCommandType.FORCE_REVALIDATE_GOAL_AND_PATH);
             }
-            logDirect("No known locations of " + gettingTo + ", canceling GetToBlock");
+            logDirect(Component.translatableEscape("baritone.log.follow.no_locations", gettingTo));
             if (isSafeToCancel) {
                 onLostControl();
             }
@@ -95,11 +96,11 @@ public final class GetToBlockProcess extends BaritoneProcessHelper implements IG
         Goal goal = new GoalComposite(knownLocations.stream().map(this::createGoal).toArray(Goal[]::new));
         if (calcFailed) {
             if (settings().blacklistClosestOnFailure.value) {
-                logDirect("Unable to find any path to " + gettingTo + ", blacklisting presumably unreachable closest instances...");
+                logDirect(Component.translatableEscape("baritone.log.follow.no_path_blacklist", gettingTo));
                 blacklistClosest();
                 return onTick(false, isSafeToCancel); // gamer moment
             } else {
-                logDirect("Unable to find any path to " + gettingTo + ", canceling GetToBlock");
+                logDirect(Component.translatableEscape("baritone.log.follow.no_path_cancel", gettingTo));
                 if (isSafeToCancel) {
                     onLostControl();
                 }
@@ -149,7 +150,7 @@ public final class GetToBlockProcess extends BaritoneProcessHelper implements IG
                     break outer;
             }
         }
-        logDebug("Blacklisting unreachable locations " + newBlacklist);
+        logDebug(Component.translatableEscape("baritone.log.follow.blacklist", newBlacklist));
         blacklist.addAll(newBlacklist);
         return !newBlacklist.isEmpty();
     }
@@ -221,13 +222,13 @@ public final class GetToBlockProcess extends BaritoneProcessHelper implements IG
                     }
                 }
                 if (arrivalTickCount++ > 20) {
-                    logDirect("Right click timed out");
+                    logDirect(Component.translatableEscape("baritone.log.follow.right_click_timeout"));
                     return true;
                 }
                 return false; // trying to right click, will do it next tick or so
             }
         }
-        logDirect("Arrived but failed to right click open");
+        logDirect(Component.translatableEscape("baritone.log.follow.right_click_failed"));
         return true;
     }
 

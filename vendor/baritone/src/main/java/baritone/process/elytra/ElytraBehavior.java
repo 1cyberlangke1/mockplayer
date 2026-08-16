@@ -196,9 +196,9 @@ public final class ElytraBehavior implements Helper {
                     .thenRun(() -> {
                         final double distance = this.path.get(0).distanceTo(this.path.get(this.path.size() - 1));
                         if (this.completePath) {
-                            logVerbose(String.format("Computed path (%.1f blocks in %.4f seconds)", distance, (System.nanoTime() - start) / 1e9d));
+                            logVerbose(net.minecraft.network.chat.Component.translatableEscape("baritone.log.elytra.path_computed", distance, (System.nanoTime() - start) / 1e9d));
                         } else {
-                            logVerbose(String.format("Computed segment (Next %.1f blocks in %.4f seconds)", distance, (System.nanoTime() - start) / 1e9d));
+                            logVerbose(net.minecraft.network.chat.Component.translatableEscape("baritone.log.elytra.segment_computed", distance, (System.nanoTime() - start) / 1e9d));
                         }
                     })
                     .whenComplete((result, ex) -> {
@@ -206,7 +206,7 @@ public final class ElytraBehavior implements Helper {
                         if (ex != null) {
                             final Throwable cause = ex.getCause();
                             if (cause instanceof PathCalculationException) {
-                                logDirect("Failed to compute path to destination");
+                                logDirect(net.minecraft.network.chat.Component.translatableEscape("baritone.log.elytra.path_failed"));
                             } else {
                                 logUnhandledException(cause);
                             }
@@ -229,7 +229,7 @@ public final class ElytraBehavior implements Helper {
                         if (ex != null) {
                             final Throwable cause = ex.getCause();
                             if (cause instanceof PathCalculationException) {
-                                logDirect("Failed to recompute segment");
+                                logDirect(net.minecraft.network.chat.Component.translatableEscape("baritone.log.elytra.segment_recompute_failed"));
                             } else {
                                 logUnhandledException(cause);
                             }
@@ -253,9 +253,9 @@ public final class ElytraBehavior implements Helper {
                         final double distance = recompute > 0 ? this.path.get(0).distanceTo(this.path.get(recompute)) : 0;
 
                         if (this.completePath) {
-                            logVerbose(String.format("Computed path (%.1f blocks in %.4f seconds)", distance, (System.nanoTime() - start) / 1e9d));
+                            logVerbose(net.minecraft.network.chat.Component.translatableEscape("baritone.log.elytra.path_computed", distance, (System.nanoTime() - start) / 1e9d));
                         } else {
-                            logVerbose(String.format("Computed segment (Next %.1f blocks in %.4f seconds)", distance, (System.nanoTime() - start) / 1e9d));
+                            logVerbose(net.minecraft.network.chat.Component.translatableEscape("baritone.log.elytra.segment_computed", distance, (System.nanoTime() - start) / 1e9d));
                         }
                     })
                     .whenComplete((result, ex) -> {
@@ -263,9 +263,9 @@ public final class ElytraBehavior implements Helper {
                         if (ex != null) {
                             final Throwable cause = ex.getCause();
                             if (cause instanceof PathCalculationException) {
-                                logDirect("Failed to compute next segment");
+                                logDirect(net.minecraft.network.chat.Component.translatableEscape("baritone.log.elytra.next_segment_failed"));
                                 if (pathStart.distToCenterSqr(ctx.player().position()) < 16 * 16) {
-                                    logVerbose("Player is near the segment start, therefore repeating this calculation is pointless. Marking as complete");
+                                    logVerbose(net.minecraft.network.chat.Component.translatableEscape("baritone.log.elytra.near_segment_start"));
                                     completePath = true;
                                 }
                             } else {
@@ -292,7 +292,7 @@ public final class ElytraBehavior implements Helper {
                 if (last != null && ElytraBehavior.this.clearView(Vec3.atLowerCornerOf(dest), Vec3.atLowerCornerOf(last), false)) {
                     path.add(new BetterBlockPos(dest));
                 } else {
-                    logDirect("unable to land at " + dest);
+                    logDirect(net.minecraft.network.chat.Component.translatableEscape("baritone.log.elytra.land_failed", dest));
                     process.landingSpotIsBad(new BetterBlockPos(dest));
                 }
             }
@@ -343,7 +343,7 @@ public final class ElytraBehavior implements Helper {
             if (ElytraBehavior.this.process.state != ElytraProcess.State.LANDING && this.ticksNearUnchanged > 100) {
                 this.pathRecalcSegment(OptionalInt.of(rangeEndExcl - 1))
                         .thenRun(() -> {
-                            logVerbose("Recalculating segment, no progress in last 100 ticks");
+                            logVerbose(net.minecraft.network.chat.Component.translatableEscape("baritone.log.elytra.segment_stalled"));
                         });
                 this.ticksNearUnchanged = 0;
                 return;
@@ -371,19 +371,13 @@ public final class ElytraBehavior implements Helper {
                     final long start = System.nanoTime();
                     this.pathRecalcSegment(rejoinMainPathAt)
                             .thenRun(() -> {
-                                logVerbose(String.format("Recalculated segment around path blockage near %s %s %s (next %.1f blocks in %.4f seconds)",
-                                        SettingsUtil.maybeCensor(blockage.x),
-                                        SettingsUtil.maybeCensor(blockage.y),
-                                        SettingsUtil.maybeCensor(blockage.z),
-                                        distance,
-                                        (System.nanoTime() - start) / 1e9d
-                                ));
+                                logVerbose(net.minecraft.network.chat.Component.translatableEscape("baritone.log.elytra.segment_blockage", SettingsUtil.maybeCensor(blockage.x), SettingsUtil.maybeCensor(blockage.y), SettingsUtil.maybeCensor(blockage.z), distance, (System.nanoTime() - start) / 1e9d));
                             });
                     return;
                 }
             }
             if (!canSeeAny && rangeStartIncl < rangeEndExcl - 2 && process.state != ElytraProcess.State.GET_TO_JUMP) {
-                this.pathRecalcSegment(OptionalInt.of(rangeEndExcl - 1)).thenRun(() -> logVerbose("Recalculated segment since no path points were visible"));
+                this.pathRecalcSegment(OptionalInt.of(rangeEndExcl - 1)).thenRun(() -> logVerbose(net.minecraft.network.chat.Component.translatableEscape("baritone.log.elytra.segment_no_visible")));
             }
         }
 
@@ -590,10 +584,10 @@ public final class ElytraBehavior implements Helper {
         trySwapElytra();
 
         if (ctx.player().horizontalCollision) {
-            logVerbose("hbonk");
+            logVerbose(net.minecraft.network.chat.Component.translatableEscape("baritone.log.elytra.hbonk"));
         }
         if (ctx.player().verticalCollision) {
-            logVerbose("vbonk");
+            logVerbose(net.minecraft.network.chat.Component.translatableEscape("baritone.log.elytra.vbonk"));
         }
 
         final SolverContext solverContext = this.new SolverContext(false);
@@ -618,14 +612,14 @@ public final class ElytraBehavior implements Helper {
         }
 
         if (solution == null) {
-            logVerbose("no solution");
+            logVerbose(net.minecraft.network.chat.Component.translatableEscape("baritone.log.elytra.no_solution"));
             return;
         }
 
         baritone.getLookBehavior().updateTarget(solution.rotation, false);
 
         if (!solution.solvedPitch) {
-            logVerbose("no pitch solution, probably gonna crash in a few ticks LOL!!!");
+            logVerbose(net.minecraft.network.chat.Component.translatableEscape("baritone.log.elytra.no_pitch_solution"));
             return;
         } else {
             this.aimPos = new BetterBlockPos(solution.goingTo.x, solution.goingTo.y, solution.goingTo.z);
@@ -749,7 +743,7 @@ public final class ElytraBehavior implements Helper {
 
     private void tickUseFireworks(final Vec3 start, final Vec3 goingTo, final boolean isBoosted, final boolean forceUseFirework) {
         if (this.remainingSetBackTicks > 0) {
-            logDebug("waiting for elytraFireworkSetbackUseDelay: " + this.remainingSetBackTicks);
+            logDebug(net.minecraft.network.chat.Component.translatableEscape("baritone.log.elytra.wait_firework", this.remainingSetBackTicks));
             return;
         }
         if (this.landingMode) {
@@ -773,10 +767,10 @@ public final class ElytraBehavior implements Helper {
             // TODO: Take the minimum boost time into account?
             if (!baritone.getInventoryBehavior().throwaway(true, ElytraBehavior::isBoostingFireworks) &&
                     !baritone.getInventoryBehavior().throwaway(true, ElytraBehavior::isFireworks)) {
-                logDirect("no fireworks");
+                logDirect(net.minecraft.network.chat.Component.translatableEscape("baritone.log.elytra.no_fireworks"));
                 return;
             }
-            logVerbose("attempting to use firework" + (forceUseFirework ? " (forced)" : ""));
+            logVerbose(net.minecraft.network.chat.Component.translatableEscape("baritone.log.elytra.use_firework", forceUseFirework ? " (forced)" : ""));
             ctx.playerController().processRightClick(ctx.player(), ctx.world(), InteractionHand.MAIN_HAND);
             this.minimumBoostTicks = 10 * (1 + getFireworkBoost(ctx.player().getItemInHand(InteractionHand.MAIN_HAND)).orElse(0));
             this.remainingFireworkTicks = 10;
@@ -1338,9 +1332,10 @@ public final class ElytraBehavior implements Helper {
         }
     }
 
-    void logVerbose(String message) {
+    @Override
+    public void logVerbose(net.minecraft.network.chat.Component... messages) {
         if (baritone.settings().elytraChatSpam.value) {
-            logDebug(message);
+            logDebug(messages);
         }
     }
 

@@ -17,6 +17,7 @@
 
 package com.mockplayer.baritone.utils.pathing;
 
+import net.minecraft.network.chat.Component;
 import com.mockplayer.baritone.api.pathing.calc.IPath;
 import com.mockplayer.baritone.api.utils.BetterBlockPos;
 import com.mockplayer.baritone.api.utils.Helper;
@@ -33,7 +34,7 @@ public final class Favoring {
         for (Avoidance avoid : Avoidance.create(ctx)) {
             avoid.applySpherical(favorings);
         }
-        Helper.HELPER.logDebug("Favoring size: " + favorings.size());
+        Helper.HELPER.logDebug(Component.translatableEscape("baritone.log.calc.favoring", favorings.size()));
     }
 
     public Favoring(IPath previous, CalculationContext context) { // create one just from previous path, no mob avoidances

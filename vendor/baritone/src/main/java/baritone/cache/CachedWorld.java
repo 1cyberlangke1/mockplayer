@@ -17,6 +17,7 @@
 
 package com.mockplayer.baritone.cache;
 
+import net.minecraft.network.chat.Component;
 import com.mockplayer.baritone.Baritone;
 import com.mockplayer.baritone.api.BaritoneAPI;
 import com.mockplayer.baritone.api.IBaritone;
@@ -199,7 +200,7 @@ public final class CachedWorld implements ICachedWorld, Helper {
             int distZ = ((region.getZ() << 9) + 256) - pruneCenter.getZ();
             double dist = Math.sqrt(distX * distX + distZ * distZ);
             if (dist > 1024) {
-                logDebug("Deleting cached region from ram");
+                logDebug(Component.translatableEscape("baritone.log.cache.region_delete"));
                 cachedRegions.remove(getRegionID(region.getX(), region.getZ()));
             }
         }

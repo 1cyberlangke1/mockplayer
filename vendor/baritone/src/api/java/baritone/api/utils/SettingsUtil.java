@@ -76,7 +76,7 @@ public class SettingsUtil {
             forEachLine(settingsByName(settingsName), line -> {
                 Matcher matcher = SETTING_PATTERN.matcher(line);
                 if (!matcher.matches()) {
-                    Helper.HELPER.logDirect("Invalid syntax in setting file: " + line);
+                    Helper.HELPER.logDirect(net.minecraft.network.chat.Component.translatableEscape("baritone.log.setting.invalid_syntax", line));
                     return;
                 }
 
@@ -89,7 +89,7 @@ public class SettingsUtil {
                 try {
                     parseAndApply(settings, settingName, settingValue);
                 } catch (Exception ex) {
-                    Helper.HELPER.logDirect("Unable to parse line " + line);
+                    Helper.HELPER.logDirect(net.minecraft.network.chat.Component.translatableEscape("baritone.log.setting.parse_failed", line));
                     ex.printStackTrace();
                 }
             });
@@ -97,7 +97,7 @@ public class SettingsUtil {
             // 首次运行无 settings.txt 是正常场景（默认值即默认设置）；per-instance 配置由主项目注入，
             // 不打扰用户（原版每次启动都打这条噪音日志）
         } catch (Exception ex) {
-            Helper.HELPER.logDirect("Exception while reading Baritone settings, some settings may be reset to default values!");
+            Helper.HELPER.logDirect(net.minecraft.network.chat.Component.translatableEscape("baritone.log.setting.read_failed"));
             ex.printStackTrace();
         }
     }
@@ -108,7 +108,7 @@ public class SettingsUtil {
                 out.write(settingToString(setting) + "\n");
             }
         } catch (Exception ex) {
-            Helper.HELPER.logDirect("Exception thrown while saving Baritone settings!");
+            Helper.HELPER.logDirect(net.minecraft.network.chat.Component.translatableEscape("baritone.log.setting.save_failed"));
             ex.printStackTrace();
         }
     }
