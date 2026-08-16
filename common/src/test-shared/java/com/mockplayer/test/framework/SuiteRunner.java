@@ -55,7 +55,8 @@ public final class SuiteRunner {
 
     private enum Phase { WAIT_TITLE, WAIT_WORLD, RUN, DONE }
 
-    private static final long PHASE_TIMEOUT_MS = 180_000;
+    // 300s：P15 真飞用例（elytra 300 格平台）需要长超时（起飞/爬升/飞行/降落）
+    private static final long PHASE_TIMEOUT_MS = 300_000;
     /** 全流程总预算（双上限：单阶段 180s + 全流程 20min，防止 all 模式无限拖）。 */
     private static final long TOTAL_TIMEOUT_MS = 20 * 60_000L;
 

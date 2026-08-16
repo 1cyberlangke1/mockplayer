@@ -111,4 +111,11 @@ public interface BotNavigator {
      */
     BotNavigator mineByType(String blockId);
 
+    /**
+     * 鞘翅飞往目标（ElytraProcess；需要假人装备鞘翅）。
+     *
+     * @param target 目标坐标
+     * @return this（链式）
+     */
+    BotNavigator elytra(BlockPos target);
 }

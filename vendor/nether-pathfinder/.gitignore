@@ -1,0 +1,6 @@
+build
+cmake-build-*
+.idea
+.direnv
+.tools/
+natives-out/

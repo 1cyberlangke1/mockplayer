@@ -1,0 +1,177 @@
+import org.tukaani.xz.FilterOptions
+import org.tukaani.xz.LZMA2Options
+import org.tukaani.xz.X86Options
+import org.tukaani.xz.XZOutputStream
+import proguard.gradle.ProGuardTask
+
+import java.nio.file.Files
+import java.util.zip.Deflater
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+
+buildscript {
+    dependencies {
+        classpath 'org.tukaani:xz:1.9'
+        classpath 'com.guardsquare:proguard-gradle:7.3.2'
+    }
+}
+
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+}
+
+group = 'dev.babbaj'
+version = '1.6.1-mockplayer'
+
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(8))
+    }
+    withSourcesJar()
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.tukaani:xz:1.9'
+}
+
+shadowJar {
+    relocate 'org.tukaani.xz', 'dev.babbaj.pathfinder.org.tukaani.xz'
+}
+
+tasks.register('buildNatives', Exec) {
+    outputs.dir(temporaryDir)
+    workingDir temporaryDir
+    commandLine new File(getProjectDir(), "multiplat_build.sh").absolutePath.toString(), getProjectDir().absolutePath.toString()
+}
+
+abstract class ZipFilesNoCompress extends DefaultTask {
+
+    @InputFiles
+    FileCollection inputFiles
+
+    @OutputFile
+    File getOutput() {
+        return new File(temporaryDir, "output.zip")
+    }
+
+    @TaskAction
+    def run() {
+        try (FileOutputStream fos = new FileOutputStream(output)
+             ZipOutputStream zos = new ZipOutputStream(fos)
+        ) {
+            zos.setLevel(Deflater.NO_COMPRESSION)
+            inputFiles.forEach {
+                zos.putNextEntry(new ZipEntry(it.getName()))
+                zos.write(Files.readAllBytes(it.toPath()))
+                zos.closeEntry()
+            }
+        }
+    }
+}
+
+abstract class XZCompress extends DefaultTask {
+
+    @InputFile
+    File input
+
+    @OutputFile
+    File getOutput() {
+        return new File(temporaryDir, "output.zip.xz")
+    }
+
+    @TaskAction
+    def run() {
+        try (FileOutputStream fos = new FileOutputStream(output);
+             XZOutputStream xz = new XZOutputStream(fos, new FilterOptions[] {new X86Options(), new LZMA2Options()})
+        ) {
+            xz.write(Files.readAllBytes(input.toPath()))
+        }
+    }
+}
+
+tasks.register('joinNatives', ZipFilesNoCompress) {
+    dependsOn buildNatives
+    inputFiles = fileTree(tasks.buildNatives.temporaryDir).matching {
+        include '*.dll'
+        include '*.so'
+        include '*.dylib'
+    }
+}
+
+tasks.register('compressNatives', XZCompress) {
+    dependsOn joinNatives
+    input = tasks.joinNatives.output
+}
+
+tasks.shadowJar.configure {
+    dependsOn compressNatives
+    into('') {
+        from compressNatives.output
+        rename { 'natives.zip.xz' }
+    }
+}
+
+tasks.register('proguard', ProGuardTask) {
+    dependsOn shadowJar
+
+    injars tasks.shadowJar.outputs.files
+    outjars new File(temporaryDir, "output.jar")
+    if (System.getProperty('java.version').startsWith('1.')) {
+        libraryjars "${System.getProperty('java.home')}/lib/rt.jar"
+    } else {
+        libraryjars "${System.getProperty('java.home')}/jmods/java.base.jmod", jarfilter: '!**.jar', filter: '!module-info.class'
+        libraryjars "${System.getProperty('java.home')}/jmods/jdk.unsupported.jmod", jarfilter: '!**.jar', filter: '!module-info.class'
+    }
+
+    verbose()
+    optimizationpasses 10
+    optimizations '**'
+    allowaccessmodification()
+    overloadaggressively()
+    dontusemixedcaseclassnames()
+    repackageclasses 'dev.babbaj.pathfinder.xz'
+    keep 'public class dev.babbaj.pathfinder.* { *; }'
+    keepnames 'public class dev.babbaj.pathfinder.* { *; }'
+}
+
+tasks.register('proguardJar', Jar) {
+    dependsOn proguard
+    from(zipTree(tasks.proguard.outJarFiles[0]))
+    archiveClassifier = 'proguard'
+    destinationDirectory = new File(buildDir, 'libs')
+}
+
+tasks.build.dependsOn tasks.proguardJar
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            groupId = 'dev.babbaj'
+            artifactId = 'nether-pathfinder'
+            artifact source: proguardJar, classifier: null
+            artifact sourcesJar
+        }
+    }
+
+    repositories {
+        //mavenLocal()
+        maven {
+            name = "FileSystem"
+            url = uri("file://" + System.getenv("MAVEN_DIR"))
+        }
+        maven {
+            name = "GithubPackages"
+            url = new URI("https://maven.pkg.github.com/Babbaj/nether-pathfinder")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR")
+                password = System.getenv("GITHUB_TOKEN")
+            }
+        }
+    }
+}

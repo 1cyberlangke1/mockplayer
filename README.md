@@ -114,6 +114,10 @@
 - [Baritone](https://github.com/cabaletta/baritone)（寻路引擎，LGPL-3.0）——感谢 leijurv、
   Brady 及所有贡献者的杰出工作；本项目集成了 Baritone 官方源码（`vendor/baritone/`），
   使用与修改均遵循 LGPL-3.0，详见 [NOTICE](NOTICE)。
+- [nether-pathfinder](https://github.com/babbaj/nether-pathfinder)（鞘翅寻路原生库，
+  babbaj 出品）——本项目 vendor 其 C++/Java 源码（`vendor/nether-pathfinder/`）并修复了
+  native 边界崩溃（`findAir` 无解时 `exit(1)` 杀 JVM → 改为返回无解走 Java 侧优雅失败）；
+  ⚠️ 上游仓库未声明许可证（默认 All rights reserved），如需分发请联系作者授权。
 - [MultiLoader-Template](https://github.com/jaredlll08/MultiLoader-Template)（双端工程模板）
 - [Fabric API](https://github.com/FabricMC/fabric)
 - [NeoForge](https://github.com/neoforged/NeoForge)
@@ -144,8 +148,10 @@
 
 - `vendor/baritone/`（Baritone 官方源码及其修改）：GNU Lesser General Public License v3.0
   （见 [NOTICE](NOTICE) 与 `vendor/baritone/LICENSE`）
+- `vendor/nether-pathfinder/`（babbaj/nether-pathfinder 源码及其修改）：上游未声明许可证
+  （默认保留所有权利；分发前需取得作者授权），修改点见上方「感谢」说明
 
-Baritone 部分与 Mockplayer 的 MIT 代码在目录上严格分离，互不传染。
+Baritone / nether-pathfinder 部分与 Mockplayer 的 MIT 代码在目录上严格分离，互不传染。
 
 ## AI 生成声明
 

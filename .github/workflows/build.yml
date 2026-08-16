@@ -58,6 +58,34 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
+      # mockplayer P15：nether-pathfinder 改为本地自编译（C 侧防御修复），
+      # 用 zig 0.11.0 交叉编译 6 平台 native（x86_64/aarch64 × win/linux/mac），
+      # 打包成 nether-pathfinder-1.6.1-mockplayer.jar 供 vendor/baritone flatDir 依赖
+      - name: Setup native toolchain (zig 0.11.0 + cmake + ninja + clang)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake ninja-build clang xz-utils
+          mkdir -p vendor/nether-pathfinder/.tools
+          curl -fsSL https://ziglang.org/download/0.11.0/zig-linux-x86_64-0.11.0.tar.xz -o vendor/nether-pathfinder/.tools/zig.tar.xz
+          tar -xf vendor/nether-pathfinder/.tools/zig.tar.xz -C vendor/nether-pathfinder/.tools
+          vendor/nether-pathfinder/.tools/zig-linux-x86_64-0.11.0/zig version
+
+      - name: Build nether-pathfinder natives (6 platforms)
+        run: |
+          chmod +x vendor/nether-pathfinder/build-natives.sh vendor/nether-pathfinder/java/zigcc.sh \
+            vendor/nether-pathfinder/java/zigcxx.sh vendor/nether-pathfinder/java/zigar.sh \
+            vendor/nether-pathfinder/java/zigranlib.sh
+          ZIG_DIR="$(pwd)/vendor/nether-pathfinder/.tools/zig-linux-x86_64-0.11.0" \
+            ./vendor/nether-pathfinder/build-natives.sh "$(pwd)/vendor/nether-pathfinder/natives-out"
+          ls -la vendor/nether-pathfinder/natives-out
+
+      - name: Package nether-pathfinder jar (classes + natives.zip.xz)
+        run: |
+          mkdir -p vendor/nether-pathfinder/build/libs
+          python3 vendor/nether-pathfinder/java/build_jar.py \
+            "$(pwd)/vendor/nether-pathfinder/natives-out" \
+            "$(pwd)/vendor/nether-pathfinder/build/libs/nether-pathfinder-1.6.1-mockplayer.jar"
+
       # vendored Baritone 是独立 gradle 项目：先构建出 fabric/neoforge jar
       # （主项目 flatDir 依赖），再构建主项目
       - name: Build vendored Baritone
@@ -109,6 +137,59 @@ jobs:
         with:
           name: merged-jar
           path: build/forgix/*.jar
+
+      - name: Upload nether-pathfinder jar (native smoke input)
+        uses: actions/upload-artifact@v7
+        with:
+          name: nether-pathfinder-jar
+          path: vendor/nether-pathfinder/build/libs/nether-pathfinder-1.6.1-mockplayer.jar
+
+  # 跨平台 native 冒烟：每平台（linux/mac/windows）加载对应 native 产物 +
+  # 最小 pathFind 调用（newContext → insertChunkData → pathFind）。
+  # 完整 mocktest 逻辑跨平台一致，只在 ubuntu（test-merged）跑；native 是交叉编译
+  # 出来的，各平台必须验证能加载能算（ABI/符号导出/端序错误只会在这里暴露）。
+  native-smoke:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect Java version
+        id: java
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(sed -nE 's/^java_version=([0-9]+).*/\1/p' gradle.properties | head -n1)
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Setup JDK ${{ steps.java.outputs.version }}
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ steps.java.outputs.version }}
+
+      - name: Download nether-pathfinder jar
+        uses: actions/download-artifact@v7
+        with:
+          name: nether-pathfinder-jar
+          path: np-jar
+
+      - name: Compile and run native smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          jar=$(ls np-jar/*.jar | head -n1)
+          mkdir -p smoke-out
+          javac -encoding UTF-8 -cp "$jar" -d smoke-out scripts/native-smoke/NativeSmoke.java
+          java -cp "smoke-out:$jar" NativeSmoke
 
   # 运行验证：xvfb 虚拟显示 + Mesa 软件渲染启动 Minecraft 客户端，
   # 用 mocktest 套件验证 merged jar 在 Fabric / NeoForge 双端真实可跑（公开仓库 Actions 无限额度）
