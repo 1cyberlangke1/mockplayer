@@ -15,20 +15,18 @@
  * along with Baritone.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package com.mockplayer.baritone.api.utils.accessor;
+package com.mockplayer.baritone.launch.mixins;
 
-import it.unimi.dsi.fastutil.objects.ObjectArrayList;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.storage.loot.LootContext;
+import com.mockplayer.baritone.api.utils.accessor.ILootPool;
 import net.minecraft.world.level.storage.loot.LootPool;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.gen.Accessor;
 
-import java.util.List;
+@Mixin(LootPool.class)
+public abstract class MixinLootPool implements ILootPool {
 
-public interface ILootTable {
-
-    ObjectArrayList<ItemStack> invokeGetRandomItems(LootContext context);
-
-    /** LootTable.pools（掉落池列表；MC 无公开 getter，走 mixin accessor）。 */
-    List<LootPool> pools();
+    @Accessor("entries")
+    @Override
+    public abstract java.util.List<net.minecraft.world.level.storage.loot.entries.LootPoolEntryContainer> entries();
 
 }

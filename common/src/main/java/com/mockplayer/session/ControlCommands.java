@@ -15,6 +15,8 @@ import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.StringReader;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -32,6 +34,7 @@ import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Comparator;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -71,6 +74,49 @@ public class ControlCommands {
 
     private static ArgSpec word(String name, SuggestionProvider<?> suggests) {
         return new ArgSpec(name, StringArgumentType.word(), suggests);
+    }
+
+    /**
+     * 方块注册表 id 参数（支持 "oak_log" / "minecraft:oak_log"）。
+     * word 参数不允许冒号导致 "minecraft:" 前缀解析失败（原版 setblock 用
+     * ResourceLocationArgument，这里等价的自实现，双端不依赖映射差异）。
+     */
+    private static ArgSpec blockId(String name, SuggestionProvider<?> suggests) {
+        return new ArgSpec(name, new BlockIdArgumentType(), suggests);
+    }
+
+    /** 资源定位字符集参数：小写字母/数字/_/-/.（可选 "namespace:" 前缀）。 */
+    public static final class BlockIdArgumentType implements com.mojang.brigadier.arguments.ArgumentType<String> {
+
+        private static final SimpleCommandExceptionType EMPTY = new SimpleCommandExceptionType(
+                net.minecraft.network.chat.Component.literal("Expected a block id"));
+
+        public static BlockIdArgumentType blockId() {
+            return new BlockIdArgumentType();
+        }
+
+        @Override
+        public String parse(StringReader reader) throws CommandSyntaxException {
+            int start = reader.getCursor();
+            while (reader.canRead() && isIdChar(reader.peek())) {
+                reader.skip();
+            }
+            String value = reader.getString().substring(start, reader.getCursor());
+            if (value.isEmpty()) {
+                throw EMPTY.createWithContext(reader);
+            }
+            return value;
+        }
+
+        private static boolean isIdChar(char c) {
+            return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+                    || c == '_' || c == '-' || c == '.' || c == ':';
+        }
+
+        @Override
+        public Collection<String> getExamples() {
+            return List.of("oak_log", "minecraft:diamond_ore");
+        }
     }
 
     private static ArgSpec greedy(String name) {
@@ -361,14 +407,9 @@ public class ControlCommands {
                     ctx -> goNear(name(ctx), i(ctx, "x"), i(ctx, "z"), i(ctx, "radius"))),
             spec("pathstop", variants(v()),
                     ctx -> pathStop(name(ctx))),
-            spec("mode", variants(v(word("mode", CommandSupport.fixed("walk", "elytra")))),
+            spec("mode", variants(v(word("mode", CommandSupport.fixed("walk")))),
                     ctx -> modeCmd(name(ctx), str(ctx, "mode"))),
-            spec("elytra", variants(v(
-                            integer("x", CommandSupport.coordX("commands.mockplayer.control.suggest.x")),
-                            integer("y", CommandSupport.coordY("commands.mockplayer.control.suggest.y")),
-                            integer("z", CommandSupport.coordZ("commands.mockplayer.control.suggest.z")))),
-                    ctx -> elytraCmd(name(ctx), i(ctx, "x"), i(ctx, "y"), i(ctx, "z"))),
-            spec("mine", variants(v(word("block", mineBlocks()))),
+            spec("mine", variants(v(blockId("block", mineBlocks()))),
                     ctx -> mineCmd(name(ctx), str(ctx, "block"))),
             spec("follow", variants(v(word("target", entityTypes()))),
                     ctx -> followCmd(name(ctx), str(ctx, "target"))),
@@ -448,7 +489,7 @@ public class ControlCommands {
         return success("pathstop", name);
     }
 
-    /** /control mode：切换移动方式（WALK/ELYTRA；后续 goto 按模式分流）。 */
+    /** /control mode：切换移动方式（当前仅 walk；鞘翅已移除）。 */
     private static Component modeCmd(String name, String mode) {
         Component blocked = requirePlaying(name);
         if (blocked != null) {
@@ -460,30 +501,13 @@ public class ControlCommands {
             return disabled;
         }
         NavigationMode m;
-        if ("elytra".equalsIgnoreCase(mode)) {
-            m = NavigationMode.ELYTRA;
-        } else if ("walk".equalsIgnoreCase(mode)) {
+        if ("walk".equalsIgnoreCase(mode)) {
             m = NavigationMode.WALK;
         } else {
             return fail("commands.mockplayer.control.mode.invalid", mode);
         }
         bot.navigate().mode(m);
         return success("mode", name);
-    }
-
-    /** /control elytra：鞘翅飞往坐标（需要假人装备鞘翅）。 */
-    private static Component elytraCmd(String name, int x, int y, int z) {
-        Component blocked = requirePlaying(name);
-        if (blocked != null) {
-            return blocked;
-        }
-        Bot bot = findBot(name);
-        Component disabled = navigateDisabled(bot);
-        if (disabled != null) {
-            return disabled;
-        }
-        bot.navigate().elytra(new BlockPos(x, y, z));
-        return success("elytra", name);
     }
 
     /** /control mine：按方块类型挖矿（Baritone MineProcess：自动找最近的该类方块+选工具+挖掘+拾取一条龙）。 */

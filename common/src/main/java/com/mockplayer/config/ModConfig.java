@@ -76,6 +76,11 @@ public class ModConfig {
     private boolean navigateAllowSprint = true;
     private boolean navigateAllowBreak = true;
     private boolean navigateAllowPlace = true;
+    private boolean navigateAllowParkour = false;
+    private boolean navigateAllowDiagonal = false;
+    private boolean navigateAvoidance = false;
+    private boolean navigatePreferSilkTouch = false;
+    private boolean navigateMineScanDroppedItems = true;
     private int navigatePathTimeoutMs = DEFAULT_NAVIGATE_PATH_TIMEOUT_MS;
     /** 寻路路径/目标渲染三态（全局，主玩家视角；YACL GUI 可配）。 */
     private RenderMode navigateRenderMode = RenderMode.F3_ONLY;
@@ -246,6 +251,46 @@ public class ModConfig {
 
     public void setNavigateAllowPlace(boolean navigateAllowPlace) {
         this.navigateAllowPlace = navigateAllowPlace;
+    }
+
+    public boolean isNavigateAllowParkour() {
+        return this.navigateAllowParkour;
+    }
+
+    public void setNavigateAllowParkour(boolean navigateAllowParkour) {
+        this.navigateAllowParkour = navigateAllowParkour;
+    }
+
+    public boolean isNavigateAllowDiagonal() {
+        return this.navigateAllowDiagonal;
+    }
+
+    public void setNavigateAllowDiagonal(boolean navigateAllowDiagonal) {
+        this.navigateAllowDiagonal = navigateAllowDiagonal;
+    }
+
+    public boolean isNavigateAvoidance() {
+        return this.navigateAvoidance;
+    }
+
+    public void setNavigateAvoidance(boolean navigateAvoidance) {
+        this.navigateAvoidance = navigateAvoidance;
+    }
+
+    public boolean isNavigatePreferSilkTouch() {
+        return this.navigatePreferSilkTouch;
+    }
+
+    public void setNavigatePreferSilkTouch(boolean navigatePreferSilkTouch) {
+        this.navigatePreferSilkTouch = navigatePreferSilkTouch;
+    }
+
+    public boolean isNavigateMineScanDroppedItems() {
+        return this.navigateMineScanDroppedItems;
+    }
+
+    public void setNavigateMineScanDroppedItems(boolean navigateMineScanDroppedItems) {
+        this.navigateMineScanDroppedItems = navigateMineScanDroppedItems;
     }
 
     public int getNavigatePathTimeoutMs() {

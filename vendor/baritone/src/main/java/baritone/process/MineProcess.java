@@ -61,6 +61,10 @@ public final class MineProcess extends BaritoneProcessHelper implements IMinePro
     private GoalRunAway branchPointRunaway;
     private int desiredQuantity;
     private int tickCount;
+    /** 掉落物扫描结果任务级锁定：客户端模拟的 ItemEntity 位置会漂移抖动，
+     *  每 tick 追最新位置会让 goal 频繁变化 → 路径反复重算 → 假人走走停停；
+     *  服务端位置稳定，捡取按服务端判定，锁定首次位置即可（onLostControl 清空）。 */
+    private List<BlockPos> droppedScanCache = java.util.Collections.emptyList();
 
     public MineProcess(Baritone baritone) {
         super(baritone);
@@ -166,6 +170,7 @@ public final class MineProcess extends BaritoneProcessHelper implements IMinePro
     @Override
     public void onLostControl() {
         mine(0, (BlockOptionalMetaLookup) null);
+        this.droppedScanCache = java.util.Collections.emptyList();
     }
 
     @Override
@@ -181,46 +186,46 @@ public final class MineProcess extends BaritoneProcessHelper implements IMinePro
 
         boolean legit = settings().legitMine.value;
         List<BlockPos> locs = knownOreLocations;
+        if (locs.isEmpty()) {
+            // 无已知矿点时先扫掉落物：mine 应能捡面前的匹配掉落物
+            // （原版首 tick knownOreLocations 为空直接取消，掉落物永远没机会进目标）
+            List<BlockPos> dropped = droppedItemsScan();
+            if (!dropped.isEmpty()) {
+                // 直接采用（掉落物已过 filter 匹配；不在此处建 CalculationContext——
+                // 每 tick 构建 BSI 开销大，会让假人寻路走走停停）
+                knownOreLocations = dropped;
+                locs = dropped;
+            }
+        }
         if (!locs.isEmpty()) {
+            if (locs.equals(this.droppedScanCache)) {
+                // 纯掉落物目标：直接生成 GoalNear（跳过 prune/CalculationContext——
+                // 每 tick 构建 BSI 开销大，会让假人寻路走走停停）
+                Goal goal = new GoalComposite(locs.stream()
+                        .map(loc -> (Goal) new GoalNear(loc, 1)).toArray(Goal[]::new));
+                return new PathingCommand(goal, PathingCommandType.SET_GOAL_AND_PATH);
+            }
             CalculationContext context = new CalculationContext(baritone);
-            List<BlockPos> locs2 = prune(context, new ArrayList<>(locs), filter, settings().mineMaxOreLocationsCount.value, blacklist, droppedItemsScan());
+            List<BlockPos> dropped = droppedItemsScan();
+            List<BlockPos> locs2 = prune(context, new ArrayList<>(locs), filter, settings().mineMaxOreLocationsCount.value, blacklist, dropped);
             // can't reassign locs, gotta make a new var locs2, because we use it in a lambda right here, and variables you use in a lambda must be effectively final
-            Goal goal = new GoalComposite(locs2.stream().map(loc -> coalesce(loc, locs2, context)).toArray(Goal[]::new));
+            // 掉落物位置：coalesce 会生成「站进空气格」的不可达目标（掉落物在空气里）。
+            // 用 GoalNear(半径 0) 精确站到掉落物所在格——MC 拾取要求玩家与物品 AABB 相交，
+            // 半径 1 站相邻格够不到（物品碰撞箱仅 0.25 格）；矿点仍走 coalesce。
+            Goal goal = new GoalComposite(locs2.stream().map(loc ->
+                    dropped.contains(loc) ? new GoalNear(loc, 0) : coalesce(loc, locs2, context)
+            ).toArray(Goal[]::new));
             knownOreLocations = locs2;
-            return new PathingCommand(goal, legit ? PathingCommandType.FORCE_REVALIDATE_GOAL_AND_PATH : PathingCommandType.REVALIDATE_GOAL_AND_PATH);
+            // 用 SET_GOAL_AND_PATH（与 CustomGoalProcess 一致）：REVALIDATE 的 postTick
+            // 每 tick 无条件重设路径，movement 完成瞬间就重启计算，任何一次失败都会进入
+            // 「失败→重算」循环导致假人原地不动；SET_GOAL_AND_PATH 只在 preTick 处理，
+            // current 存在时不打断，与已验证的 goTo 链路完全一致。
+            return new PathingCommand(goal, PathingCommandType.SET_GOAL_AND_PATH);
         }
-        // we don't know any ore locations at the moment
-        if (!legit && !settings().exploreForBlocks.value) {
-            return null;
-        }
-        // only when we should explore for blocks or are in legit mode we do this
-        int y = settings().legitMineYLevel.value;
-        if (branchPoint == null) {
-            /*if (!baritone.getPathingBehavior().isPathing() && playerFeet().y == y) {
-                // cool, path is over and we are at desired y
-                branchPoint = playerFeet();
-                branchPointRunaway = null;
-            } else {
-                return new GoalYLevel(y);
-            }*/
-            branchPoint = ctx.playerFeet();
-        }
-        // TODO shaft mode, mine 1x1 shafts to either side
-        // TODO also, see if the GoalRunAway with maintain Y at 11 works even from the surface
-        if (branchPointRunaway == null) {
-            branchPointRunaway = new GoalRunAway(1, y, branchPoint) {
-                @Override
-                public boolean isInGoal(int x, int y, int z) {
-                    return false;
-                }
-
-                @Override
-                public double heuristic() {
-                    return Double.NEGATIVE_INFINITY;
-                }
-            };
-        }
-        return new PathingCommand(branchPointRunaway, PathingCommandType.REVALIDATE_GOAL_AND_PATH);
+        // 找不到目标（无矿点且无匹配掉落物）：
+        // mockplayer 移除 exploreForBlocks/legitMine 的 GoalRunAway 探索乱跑，
+        // 直接取消任务（onTick 收到 null → cancel），由 mod 层决定反馈。
+        return null;
     }
 
     private void rescan(List<BlockPos> already, CalculationContext context) {
@@ -340,6 +345,15 @@ public final class MineProcess extends BaritoneProcessHelper implements IMinePro
     }
 
     public List<BlockPos> droppedItemsScan() {
+        if (!this.droppedScanCache.isEmpty()) {
+            return this.droppedScanCache;
+        }
+        List<BlockPos> ret = scanDroppedItems();
+        this.droppedScanCache = ret;
+        return ret;
+    }
+
+    private List<BlockPos> scanDroppedItems() {
         if (!settings().mineScanDroppedItems.value) {
             return Collections.emptyList();
         }

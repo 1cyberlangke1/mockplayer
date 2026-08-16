@@ -36,12 +36,15 @@ public final class BaritoneNavigator implements BotNavigator {
     private final BotImpl bot;
     /** 假人专属 Baritone 实例（未 PLAYING 时为 null；方法调用安全返回，无操作）。 */
     private final IBaritone baritone;
-    /** 移动模式（WALK/ELYTRA；goTo 按模式选择进程）。 */
+    /** 移动模式（当前仅 WALK；鞘翅已移除）。 */
     private NavigationMode mode = NavigationMode.WALK;
     /** 当前任务类型（tick 与进程状态同步）。 */
     private NavigatorTask task = NavigatorTask.NONE;
     /** 当前任务目标（查询用；任务结束清空）。 */
     private BlockPos goal;
+    /** 任务开始时的假人朝向（任务结束恢复，baritone 寻路完成不改朝向）。 */
+    private float startYaw;
+    private float startPitch;
 
     public BaritoneNavigator(BotImpl bot, IBaritone baritone) {
         this.bot = bot;
@@ -54,7 +57,8 @@ public final class BaritoneNavigator implements BotNavigator {
         if (b == null) {
             return this;
         }
-        // 替换旧任务：清掉所有进程（含 follow/mine/elytra），路径段也取消
+        recordStartRotation();
+        // 替换旧任务：清掉所有进程（含 follow/mine），路径段也取消
         b.getPathingBehavior().cancelEverything();
         if (goal instanceof NavigationGoal.BlockGoal g) {
             this.goTo(b, g.pos());
@@ -96,17 +100,11 @@ public final class BaritoneNavigator implements BotNavigator {
         return this;
     }
 
-    /** goTo 按当前模式分流：WALK → customGoalProcess；ELYTRA → elytraProcess。 */
+    /** goTo：customGoalProcess（鞘翅已移除，模式仅 WALK）。 */
     private void goTo(IBaritone b, BlockPos pos) {
-        if (this.mode == NavigationMode.ELYTRA) {
-            b.getElytraProcess().pathTo(pos);
-            this.task = NavigatorTask.GO_TO;
-            this.goal = pos;
-        } else {
-            b.getCustomGoalProcess().setGoalAndPath(new GoalBlock(pos));
-            this.task = NavigatorTask.GO_TO;
-            this.goal = pos;
-        }
+        b.getCustomGoalProcess().setGoalAndPath(new GoalBlock(pos));
+        this.task = NavigatorTask.GO_TO;
+        this.goal = pos;
     }
 
     /** 复合目标的第一个方块目标（查询用；没有方块目标返回 null）。 */
@@ -170,6 +168,7 @@ public final class BaritoneNavigator implements BotNavigator {
         if (b == null) {
             return this;
         }
+        recordStartRotation();
         b.getPathingBehavior().cancelEverything();
         net.minecraft.world.level.block.state.BlockState state = this.bot.getBlockState(target);
         b.getMineProcess().mine(1, new BlockOptionalMetaLookup(state.getBlock()));
@@ -185,25 +184,12 @@ public final class BaritoneNavigator implements BotNavigator {
         if (b == null) {
             return this;
         }
+        recordStartRotation();
         b.getPathingBehavior().cancelEverything();
         b.getMineProcess().mine(1, new BlockOptionalMetaLookup(blockId));
         this.task = NavigatorTask.MINE;
         // 目标由 MineProcess 按类型就近寻找，无固定坐标
         this.goal = null;
-        this.bot.setNavigating(true);
-        return this;
-    }
-
-    @Override
-    public BotNavigator elytra(BlockPos target) {
-        IBaritone b = this.baritone;
-        if (b == null) {
-            return this;
-        }
-        b.getPathingBehavior().cancelEverything();
-        b.getElytraProcess().pathTo(target);
-        this.task = NavigatorTask.ELYTRA;
-        this.goal = target;
         this.bot.setNavigating(true);
         return this;
     }
@@ -222,16 +208,33 @@ public final class BaritoneNavigator implements BotNavigator {
             active = false;
         } else {
             active = switch (this.task) {
-                case GO_TO, GO_NEAR ->
-                        b.getCustomGoalProcess().isActive() || b.getElytraProcess().isActive();
+                case GO_TO, GO_NEAR -> b.getCustomGoalProcess().isActive();
                 case FOLLOW -> b.getFollowProcess().isActive();
                 case MINE -> b.getMineProcess().isActive();
-                case ELYTRA -> b.getElytraProcess().isActive();
                 default -> false;
             };
         }
         if (!active) {
+            this.restoreStartRotation();
             this.resetTask();
+        }
+    }
+
+    /** 记录任务开始时的假人朝向（任务结束恢复用）。 */
+    private void recordStartRotation() {
+        net.minecraft.client.player.LocalPlayer player = this.bot.getLocalPlayer();
+        if (player != null) {
+            this.startYaw = player.getYRot();
+            this.startPitch = player.getXRot();
+        }
+    }
+
+    /** 任务结束恢复任务前朝向（baritone 寻路中 movement 每 tick 面向移动方向，完成时不留下改动的朝向）。 */
+    private void restoreStartRotation() {
+        net.minecraft.client.player.LocalPlayer player = this.bot.getLocalPlayer();
+        if (player != null) {
+            player.setYRot(this.startYaw);
+            player.setXRot(this.startPitch);
         }
     }
 }

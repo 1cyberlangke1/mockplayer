@@ -38,6 +38,9 @@ import java.util.stream.Stream;
  */
 public interface Helper {
 
+    /** baritone 日志统一走 mockplayer 通道（玩家聊天不打扰，信息进 mod 日志可查）。 */
+    org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger("mockplayer-baritone");
+
     /**
      * Instance of {@link Helper}. Used for static-context reference.
      */
@@ -79,7 +82,7 @@ public interface Helper {
      * @param message The message to display in the popup
      */
     default void logToast(Component title, Component message) {
-        Minecraft.getInstance().execute(() -> BaritoneAPI.getSettings().toaster.value.accept(title, message));
+        LOGGER.debug("[baritone-toast] {}", message.getString());
     }
 
     /**
@@ -140,7 +143,7 @@ public interface Helper {
      * @param error   Whether to log as an error
      */
     default void logNotificationDirect(String message, boolean error) {
-        Minecraft.getInstance().execute(() -> BaritoneAPI.getSettings().notifier.value.accept(message, error));
+        LOGGER.debug("[baritone-notification] {}", message);
     }
 
     /**
@@ -166,17 +169,13 @@ public interface Helper {
      * @param components The components to send
      */
     default void logDirect(boolean logAsToast, Component... components) {
-        MutableComponent component = Component.literal("");
-        if (!logAsToast && !BaritoneAPI.getSettings().useMessageTag.value) {
-            component.append(getPrefix());
-            component.append(Component.literal(" "));
+        // baritone 的聊天输出由 mockplayer 统一接管：转进 mod 日志（debug 级），
+        // 玩家聊天不再出现 [Baritone] 前缀消息；需要展示时由 mockplayer 侧自行决定。
+        StringBuilder sb = new StringBuilder();
+        for (Component component : components) {
+            sb.append(component.getString());
         }
-        Arrays.asList(components).forEach(component::append);
-        if (logAsToast) {
-            logToast(getPrefix(), component);
-        } else {
-            Minecraft.getInstance().execute(() -> BaritoneAPI.getSettings().logger.value.accept(component));
-        }
+        LOGGER.debug("[baritone] {}", sb);
     }
 
     /**

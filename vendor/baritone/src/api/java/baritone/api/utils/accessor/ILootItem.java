@@ -17,18 +17,12 @@
 
 package com.mockplayer.baritone.api.utils.accessor;
 
-import it.unimi.dsi.fastutil.objects.ObjectArrayList;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.storage.loot.LootContext;
-import net.minecraft.world.level.storage.loot.LootPool;
+import net.minecraft.core.Holder;
+import net.minecraft.world.item.Item;
 
-import java.util.List;
+/** 读取 LootItem.item（掉落条目对应的物品 Holder；MC 无公开 getter，走 mixin accessor）。 */
+public interface ILootItem {
 
-public interface ILootTable {
-
-    ObjectArrayList<ItemStack> invokeGetRandomItems(LootContext context);
-
-    /** LootTable.pools（掉落池列表；MC 无公开 getter，走 mixin accessor）。 */
-    List<LootPool> pools();
+    Holder<Item> item();
 
 }

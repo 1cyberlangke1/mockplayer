@@ -17,6 +17,8 @@
     "MixinItemStack",
     "MixinLivingEntity",
     "MixinLootContextBuilder",
+    "MixinLootItem",
+    "MixinLootPool",
     "MixinLootTable",
     "MixinNetworkManager",
     "MixinPalettedContainer",
