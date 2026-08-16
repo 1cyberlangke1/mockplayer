@@ -166,7 +166,10 @@ public final class BaritoneNavigator implements BotNavigator {
         }
         b.getPathingBehavior().cancelEverything();
         net.minecraft.world.level.block.state.BlockState state = this.bot.getBlockState(target);
-        b.getMineProcess().mine(1, new BlockOptionalMetaLookup(state.getBlock()));
+        // quantity=0：挖到没有目标/手动 stop 为止。quantity>0 时 MineProcess 检查背包
+        // 已有数量（desiredQuantity 达成即取消）——生产实测：假人背包已有 oak_log 时
+        // mine oak_log 第一拍就「have_items」取消，假人完全不动（背包空的新假人才正常）。
+        b.getMineProcess().mine(0, new BlockOptionalMetaLookup(state.getBlock()));
         this.task = NavigatorTask.MINE;
         this.goal = target;
         this.bot.setNavigating(true);
@@ -180,7 +183,8 @@ public final class BaritoneNavigator implements BotNavigator {
             return this;
         }
         b.getPathingBehavior().cancelEverything();
-        b.getMineProcess().mine(1, new BlockOptionalMetaLookup(blockId));
+        // 同上：quantity=0（背包已有目标物品不阻断挖矿，生产根因回归见 mine(BlockPos) 注释）
+        b.getMineProcess().mine(0, new BlockOptionalMetaLookup(blockId));
         this.task = NavigatorTask.MINE;
         // 目标由 MineProcess 按类型就近寻找，无固定坐标
         this.goal = null;

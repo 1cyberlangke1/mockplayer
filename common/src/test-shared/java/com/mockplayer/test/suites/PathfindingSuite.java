@@ -104,13 +104,21 @@ public class PathfindingSuite extends TestSuite {
     }
 
     /** 测试 11：mine 找方块链路——mine dirt 后假人必须找到目标并移动（真实 mine 的第一段，
-     *  之前只测过「面前生成掉落物→捡」，从未测过 scanChunkRadius 找方块路径）。 */
+     *  之前只测过「面前生成掉落物→捡」，从未测过 scanChunkRadius 找方块路径）。
+     *  生产根因回归（2026-08-16 实测）：假人背包已有目标物品时，旧 quantity=1 语义
+     *  第一拍就「have_items」取消 → 假人完全不动；现在预置 dirt 到背包再 mine，
+     *  必须仍找到 16 格外的 dirt、走过去、挖到第二个（背包数量增加）。 */
     private void mineFindsBlocks(TestContext ctx) {
         ctx.run(() -> SuitesSupport.createBot(ctx, BOT_A));
         ctx.await("lifecycle PLAYING", () -> ctx.bot() != null
                 && ctx.bot().getLifecycle() == BotLifecycle.PLAYING, 300);
         SuitesSupport.awaitChunkLoaded(ctx);
         ctx.run(() -> this.startPos = ctx.bot().getLocalPlayer().blockPosition());
+        // 生产根因复现：先给假人背包放 1 个 dirt（模拟生产假人背包已有 oak_log 的场景）
+        SuitesSupport.give(ctx, BOT_A, "dirt");
+        ctx.await("preloaded dirt in inventory", () -> ctx.bot() != null
+                && ctx.bot().getLocalPlayer() != null
+                && countItem(ctx, net.minecraft.world.item.Items.DIRT) >= 1, 200);
         // 服务端在假人 16 格开外放置一个 dirt（空手挖必掉落；超平坦世界只有砂岩，
         // 砂岩空手挖不掉落——放远处保证假人必须「找到 → 走 16 格 → 挖 → 掉落 → 捡」全链）
         ctx.run(() -> ctx.server().execute(() -> {
@@ -168,13 +176,14 @@ public class PathfindingSuite extends TestSuite {
                 && ctx.bot().getLocalPlayer() != null
                 && distanceFromStart(ctx) > 2.0, () -> "dist=" + distanceFromStart(ctx)
                 + " start=" + this.startPos + " feet=" + ctx.bot().getLocalPlayer().blockPosition());
-        // 真挖掘验证：挖下的 dirt 必须进假人背包（「移动」≠「挖掘」，历史测试从没断言过方块入包）
+        // 真挖掘验证：挖下的新 dirt 必须进假人背包（预置 1 个 + 挖到 1 个 = ≥2，
+        // 「移动」≠「挖掘」，历史测试从没断言过方块入包）
         ctx.await("dirt in inventory (mined)", () -> ctx.bot() != null
                 && ctx.bot().getLocalPlayer() != null
-                && hasItem(ctx, net.minecraft.world.item.Items.DIRT), 600);
+                && countItem(ctx, net.minecraft.world.item.Items.DIRT) >= 2, 600);
         ctx.check("mine actually mined dirt", () -> ctx.bot() != null
                 && ctx.bot().getLocalPlayer() != null
-                && hasItem(ctx, net.minecraft.world.item.Items.DIRT));
+                && countItem(ctx, net.minecraft.world.item.Items.DIRT) >= 2);
         ctx.run(() -> ctx.bot().navigate().stop());
         ctx.run(() -> MockplayerApi.bots().removeBot(BOT_A, "test"));
     }
@@ -364,6 +373,13 @@ public class PathfindingSuite extends TestSuite {
     private static boolean hasItem(TestContext ctx, net.minecraft.world.item.Item item) {
         return ctx.bot().getLocalPlayer().getInventory().contains(
                 stack -> stack.getItem() == item);
+    }
+
+    /** 假人背包指定物品数量（常规槽位，与 hasItem 同范围）。 */
+    private static int countItem(TestContext ctx, net.minecraft.world.item.Item item) {
+        return ctx.bot().getLocalPlayer().getInventory().getNonEquipmentItems().stream()
+                .filter(stack -> stack.getItem() == item)
+                .mapToInt(net.minecraft.world.item.ItemStack::getCount).sum();
     }
 
     /** 测试 8：默认 F3_ONLY 下（F3 关）渲染闸门为 false（回归：原每 tick 同步首次跳过导致一直渲染）。 */
