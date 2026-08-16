@@ -147,23 +147,20 @@ public final class MemoryEstimator {
 
     /** 区块 block/fluid tick 容器：队列 + 待处理列表 + 去重集合。 */
     private static long chunkTicksBytes(LevelChunk chunk) {
-        long total = 0;
-        try {
-            total += ticksBytes(chunk.getBlockTicks());
-            total += ticksBytes(chunk.getFluidTicks());
-        } catch (RuntimeException e) {
-            warnAccessor("ticks");
-        }
-        return total;
+        return ticksBytes(chunk.getBlockTicks()) + ticksBytes(chunk.getFluidTicks());
     }
 
     private static long ticksBytes(Object ticks) {
-        if (!(ticks instanceof net.minecraft.world.ticks.LevelChunkTicks<?> levelChunkTicks)) {
+        // 只认注入过 accessor 的 LevelChunkTicks；c2me 等 mod 重写 chunk 系统后会换成
+        // 自己的 scheduler（兼容 LevelChunkTicks 接口但无我们的 accessor），此时降级为
+        // 结构下界并提示一次（不静默：记账精度下降必须可见）。
+        if (!(ticks instanceof MockplayerLevelChunkTicksAccessor access)) {
+            if (ticks != null) {
+                warnAccessor("ticks");
+            }
             return 0;
         }
-        MockplayerLevelChunkTicksAccessor access =
-                (MockplayerLevelChunkTicksAccessor) levelChunkTicks;
-        long total = LayoutSizes.shallowSize(net.minecraft.world.ticks.LevelChunkTicks.class);
+        long total = LayoutSizes.shallowSize(ticks.getClass());
         total += StructureHeap.priorityQueueHeap(access.mockplayer$getTickQueue().size());
         java.util.List<?> pending = access.mockplayer$getPendingTicks();
         if (pending != null && !pending.isEmpty()) {
