@@ -68,21 +68,9 @@ public final class ModConfigIO {
             config.setCommands(readCommands(root));
             // 假人显示三态（新字段；旧布尔 debugOverlayEnabled 已废弃，读不到不影响）
             config.setDebugOverlayMode(readEnum(root, "debugOverlayMode", RenderMode.F3_ONLY));
-            // 寻路段（行为项 per-bot 覆盖 + 渲染三态全局）
+            // 寻路段（行为项归 baritone 全局 Settings/settings.txt；这里只留总开关 + 渲染三态）
             config.setNavigateEnabled(readBool(root, "navigateEnabled",
                     ModConfig.DEFAULT_NAVIGATE_ENABLED));
-            config.setNavigateAllowSprint(readBool(root, "navigateAllowSprint", true));
-            config.setNavigateAllowBreak(readBool(root, "navigateAllowBreak", true));
-            config.setNavigateAllowPlace(readBool(root, "navigateAllowPlace", true));
-            config.setNavigateAllowParkour(readBool(root, "navigateAllowParkour", false));
-            config.setNavigateAllowDiagonal(readBool(root, "navigateAllowDiagonal", false));
-            config.setNavigateAvoidance(readBool(root, "navigateAvoidance", false));
-            config.setNavigatePreferSilkTouch(readBool(root, "navigatePreferSilkTouch", false));
-            config.setNavigateMineScanDroppedItems(readBool(root, "navigateMineScanDroppedItems", true));
-            config.setNavigatePathTimeoutMs(readInt(root, "navigatePathTimeoutMs",
-                    ModConfig.DEFAULT_NAVIGATE_PATH_TIMEOUT_MS,
-                    ModConfig.MIN_NAVIGATE_PATH_TIMEOUT_MS,
-                    ModConfig.MAX_NAVIGATE_PATH_TIMEOUT_MS));
             config.setNavigateRenderMode(readEnum(root, "navigateRenderMode", RenderMode.F3_ONLY));
             // GUI 开关：缺失/非布尔 → 默认 true
             if (root.has("guiEnabled") && root.get("guiEnabled").isJsonPrimitive()
@@ -142,10 +130,6 @@ public final class ModConfigIO {
         normalized.setCommands(config.getCommands());
         normalized.setDebugOverlayMode(config.getDebugOverlayMode());
         normalized.setNavigateEnabled(config.isNavigateEnabled());
-        normalized.setNavigateAllowSprint(config.isNavigateAllowSprint());
-        normalized.setNavigateAllowBreak(config.isNavigateAllowBreak());
-        normalized.setNavigateAllowPlace(config.isNavigateAllowPlace());
-        normalized.setNavigatePathTimeoutMs(config.getNavigatePathTimeoutMs());
         normalized.setNavigateRenderMode(config.getNavigateRenderMode());
         normalized.setGuiEnabled(config.isGuiEnabled());
         normalized.setGuiOpacity(config.getGuiOpacity());

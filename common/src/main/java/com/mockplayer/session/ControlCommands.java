@@ -590,10 +590,9 @@ public class ControlCommands {
                     return fail("commands.mockplayer.control.config.invalid_value", key, value);
                 }
                 if (session != null) {
-                    if (!com.mockplayer.session.NavigateSupport.applyDirectSetting(session, key, parsed)) {
-                        session.setNavigateOverride(key, parsed);
-                        com.mockplayer.session.NavigateSupport.applyToSession(session);
-                    }
+                    // 统一走 per-bot override（含日志开关）：写 override + 立即应用到实例 settings
+                    session.setNavigateOverride(key, parsed);
+                    com.mockplayer.session.NavigateSupport.applyToSession(session);
                 }
                 return info("commands.mockplayer.control.config.set", playerName(name), key, parsed);
             }
@@ -602,10 +601,9 @@ public class ControlCommands {
                     return fail("commands.mockplayer.control.config.usage", mode);
                 }
                 if (session != null) {
-                    if (!com.mockplayer.session.NavigateSupport.applyDirectSetting(session, key, Boolean.FALSE)) {
-                        session.setNavigateOverride(key, null);
-                        com.mockplayer.session.NavigateSupport.applyToSession(session);
-                    }
+                    // reset = 移除 per-bot 覆盖 → 恢复全局（baritone settings.txt）默认
+                    session.setNavigateOverride(key, null);
+                    com.mockplayer.session.NavigateSupport.applyToSession(session);
                 }
                 return info("commands.mockplayer.control.config.reset", playerName(name), key);
             }

@@ -46,6 +46,137 @@ public class PathfindingSuite extends TestSuite {
         test("渲染默认 F3_ONLY 不渲染", this::renderDefaultOff);
         test("mine 拾取掉落物", this::minePicksUpDrops);
         test("baritone 日志开关", this::baritoneLogSwitches);
+        test("mine 找方块并移动", this::mineFindsBlocks);
+        test("mine 无目标方块不提前取消", this::mineNoTargetKeepsAlive);
+        test("baritone 配置界面与全局继承", this::baritoneConfigScreenAndGlobal);
+    }
+
+    /** 测试 13：baritone 配置界面（YACL 反射桥可构造）+ 全局 Settings → 新假人
+     *  copyFrom 继承（settings.txt 是唯一全局来源；假人创建时继承全局默认）。 */
+    private void baritoneConfigScreenAndGlobal(TestContext ctx) {
+        ctx.run(() -> {
+            // YACL 环境（mocktest 注入）：反射桥必须能构造出配置界面
+            net.minecraft.client.gui.screens.Screen screen =
+                    com.mockplayer.baritone.gui.BaritoneConfigScreenFactory.create(null);
+            ctx.checkNow("baritone config screen creatable (yacl present)",
+                    screen != null, screen == null ? "factory returned null" : screen.getClass().getName());
+        });
+        // 改全局默认 → 新假人必须继承（copyFrom 链路；per-bot override 为空时生效）
+        ctx.run(() -> com.mockplayer.baritone.api.BaritoneAPI.getSettings().allowSprint.value = false);
+        ctx.run(() -> SuitesSupport.createBot(ctx, BOT_A));
+        ctx.await("lifecycle PLAYING", () -> ctx.bot() != null
+                && ctx.bot().getLifecycle() == BotLifecycle.PLAYING, 300);
+        SuitesSupport.awaitChunkLoaded(ctx);
+        ctx.run(() -> {
+            BotImpl impl = (BotImpl) ctx.bot();
+            com.mockplayer.baritone.api.IBaritone b = impl.session().getBaritone();
+            ctx.checkNow("new bot inherits global allowSprint=false",
+                    b != null && !b.settings().allowSprint.value);
+            // 恢复全局默认（不污染后续）
+            com.mockplayer.baritone.api.BaritoneAPI.getSettings().allowSprint.value = true;
+        });
+        ctx.run(() -> MockplayerApi.bots().removeBot(BOT_A, "test"));
+    }
+
+    /** 测试 12：mine 无目标方块（diamond_ore，超平坦世界不存在）——
+     *  rescan 扫空（区块已加载）→ 权威取消 + 反馈（不崩溃、任务复位干净）。
+     *  mockplayer 不做 exploreForBlocks 探索乱跑：扫空即取消，无目标任务必须结束。
+     *  「首 tick 不提前取消」由 REQUEST_PAUSE 保证（updateGoal 无目标时等待异步
+     *  rescan 而非 cancel；生产真实世界扫描慢的场景），此处验证最终状态。 */
+    private void mineNoTargetKeepsAlive(TestContext ctx) {
+        ctx.run(() -> SuitesSupport.createBot(ctx, BOT_A));
+        ctx.await("lifecycle PLAYING", () -> ctx.bot() != null
+                && ctx.bot().getLifecycle() == BotLifecycle.PLAYING, 300);
+        SuitesSupport.awaitChunkLoaded(ctx);
+        ctx.run(() -> ctx.platform().executeClientCommand("control " + BOT_A + " mine diamond_ore"));
+        // rescan 扫描空 + 区块已加载 → 权威取消 + 反馈（不崩溃）
+        ctx.await("mine cancelled by rescan (no target)", () -> ctx.bot() != null
+                && !ctx.bot().navigate().isActive(), 300);
+        // 取消后 BaritoneNavigator.tick 下一拍复位任务状态（await 满足与复位不同 tick）
+        ctx.await("task resets to NONE", () -> ctx.bot() != null
+                && ctx.bot().navigate().currentTask() == NavigatorTask.NONE, 40);
+        // 注意：必须用延迟 check（checkNow 在用例注册阶段立即求值，此时 createBot 未执行
+        // bot 必为 null——历史 FAIL「bot null」的根因就是误用 checkNow 在用例主体）
+        ctx.check("mine no-target cancelled cleanly", () -> ctx.bot() != null
+                && ctx.bot().navigate().currentTask() == NavigatorTask.NONE);
+        ctx.run(() -> ctx.bot().navigate().stop());
+        ctx.run(() -> MockplayerApi.bots().removeBot(BOT_A, "test"));
+    }
+
+    /** 测试 11：mine 找方块链路——mine dirt 后假人必须找到目标并移动（真实 mine 的第一段，
+     *  之前只测过「面前生成掉落物→捡」，从未测过 scanChunkRadius 找方块路径）。 */
+    private void mineFindsBlocks(TestContext ctx) {
+        ctx.run(() -> SuitesSupport.createBot(ctx, BOT_A));
+        ctx.await("lifecycle PLAYING", () -> ctx.bot() != null
+                && ctx.bot().getLifecycle() == BotLifecycle.PLAYING, 300);
+        SuitesSupport.awaitChunkLoaded(ctx);
+        ctx.run(() -> this.startPos = ctx.bot().getLocalPlayer().blockPosition());
+        // 服务端在假人 16 格开外放置一个 dirt（空手挖必掉落；超平坦世界只有砂岩，
+        // 砂岩空手挖不掉落——放远处保证假人必须「找到 → 走 16 格 → 挖 → 掉落 → 捡」全链）
+        ctx.run(() -> ctx.server().execute(() -> {
+            ServerPlayer sp = ctx.server().getPlayerList().getPlayerByName(BOT_A);
+            if (sp != null) {
+                ctx.server().getCommands().performPrefixedCommand(
+                        ctx.server().createCommandSourceStack(),
+                        String.format("setblock %d %d %d minecraft:dirt",
+                                (int) Math.floor(sp.getX()) + 16,
+                                (int) Math.floor(sp.getY()),
+                                (int) Math.floor(sp.getZ())));
+            }
+        }));
+        ctx.await("placed dirt visible in bot level", () -> ctx.bot() != null
+                && ctx.bot().getLocalPlayer() != null
+                && ctx.bot().getLevel() != null
+                && ctx.bot().getLevel().getBlockState(
+                        ctx.bot().getLocalPlayer().blockPosition().offset(16, 0, 0)).getBlock()
+                        == net.minecraft.world.level.block.Blocks.DIRT, 300);
+        // 诊断：找方块链路分段（chunkSource 类型 → chunk 可获取 → filter 匹配 → scanChunkRadius 原始调用）
+        ctx.run(() -> {
+            var level = ctx.bot().getLevel();
+            var feet = ctx.bot().getLocalPlayer().blockPosition();
+            // 测试世界（mocktest）表面是 sandstone——用它做目标（dirt 在此世界不存在）
+            var cs = level.getChunkSource();
+            ctx.checkNow("diag chunkSource is ClientChunkCache",
+                    cs instanceof net.minecraft.client.multiplayer.ClientChunkCache,
+                    cs.getClass().getName());
+            net.minecraft.world.level.chunk.LevelChunk chunk = null;
+            if (cs instanceof net.minecraft.client.multiplayer.ClientChunkCache ccc) {
+                chunk = ccc.getChunk(feet.getX() >> 4, feet.getZ() >> 4, null, false);
+            }
+            ctx.checkNow("diag chunk retrievable", chunk != null,
+                    chunk == null ? "null" : chunk.getClass().getName() + " empty=" + chunk.isEmpty());
+            var lookup = new com.mockplayer.baritone.api.utils.BlockOptionalMetaLookup("sandstone");
+            ctx.checkNow("diag filter matches below",
+                    lookup.has(level.getBlockState(feet.below())),
+                    level.getBlockState(feet.below()).toString());
+            try {
+                var bar = ((BotImpl) ctx.bot()).session().getBaritone();
+                var found = com.mockplayer.baritone.api.BaritoneAPI.getProvider().getWorldScanner()
+                        .scanChunkRadius(bar.getPlayerContext(), lookup, 100, -1, 32);
+                ctx.checkNow("diag scanChunkRadius finds sandstone", !found.isEmpty(), "found=" + found.size());
+            } catch (Throwable t) {
+                ctx.checkNow("diag scanChunkRadius finds sandstone", false, t.toString());
+            }
+        });
+        ctx.run(() -> ctx.platform().executeClientCommand("control " + BOT_A + " mine dirt"));
+        ctx.await("mine task active (goal set)", () -> ctx.bot() != null
+                && ctx.bot().navigate().isActive(), 200);
+        ctx.await("bot moved toward dirt (>2 blocks)", () -> ctx.bot() != null
+                && ctx.bot().getLocalPlayer() != null
+                && (distanceFromStart(ctx) > 2.0 || !ctx.bot().navigate().isActive()), 600);
+        ctx.check("mine found dirt and moved", () -> ctx.bot() != null
+                && ctx.bot().getLocalPlayer() != null
+                && distanceFromStart(ctx) > 2.0, () -> "dist=" + distanceFromStart(ctx)
+                + " start=" + this.startPos + " feet=" + ctx.bot().getLocalPlayer().blockPosition());
+        // 真挖掘验证：挖下的 dirt 必须进假人背包（「移动」≠「挖掘」，历史测试从没断言过方块入包）
+        ctx.await("dirt in inventory (mined)", () -> ctx.bot() != null
+                && ctx.bot().getLocalPlayer() != null
+                && hasItem(ctx, net.minecraft.world.item.Items.DIRT), 600);
+        ctx.check("mine actually mined dirt", () -> ctx.bot() != null
+                && ctx.bot().getLocalPlayer() != null
+                && hasItem(ctx, net.minecraft.world.item.Items.DIRT));
+        ctx.run(() -> ctx.bot().navigate().stop());
+        ctx.run(() -> MockplayerApi.bots().removeBot(BOT_A, "test"));
     }
 
     /** 测试 10：baritone 日志四开关默认关 + config set 链路生效 + 调用不崩。 */
@@ -128,8 +259,9 @@ public class PathfindingSuite extends TestSuite {
         }
     }
 
-    /** 测试 9：mine 按类型挖矿能拾取掉落物——服务端生成 oak_log 掉落物在假人面前，
-     *  mine 后 MineProcess 扫描到掉落物（filter 匹配）→ 寻路过去 → 背包出现 oak_log。 */
+    /** 测试 9：mine 按类型挖矿能拾取掉落物——服务端生成 oak_log 掉落物在假人 8 格外
+     *  （超出原版 3 格吸附范围，排除「被吸走」假阳性），mine 后 MineProcess 扫描到掉落物
+     *  （filter 匹配）→ 寻路过去 → 背包出现 oak_log（真拾取链路）。 */
     private void minePicksUpDrops(TestContext ctx) {
         ctx.run(() -> SuitesSupport.createBot(ctx, BOT_A));
         ctx.await("lifecycle PLAYING", () -> ctx.bot() != null
@@ -150,7 +282,8 @@ public class PathfindingSuite extends TestSuite {
                 && !ctx.bot().getLevel().getBlockState(new BlockPos(100, 3, 100)).isAir()
                 && !ctx.bot().getLevel().getBlockState(new BlockPos(103, 3, 100)).isAir(), 300);
         ctx.run(() -> this.startPos = ctx.bot().getLocalPlayer().blockPosition());
-        // 服务端在假人面前生成 oak_log 掉落物（PickupDelay=0，可立即捡）
+        // 服务端在假人 16 格外生成 oak_log 掉落物（PickupDelay=0；16 格远超原版吸附范围，
+        // 假人必须真的寻路过去才能捡到——任何「没移动就捡到」都是吸附假象/测试 bug）
         ctx.run(() -> ctx.server().execute(() -> {
             ServerPlayer sp = ctx.server().getPlayerList().getPlayerByName(BOT_A);
             if (sp != null) {
@@ -158,7 +291,7 @@ public class PathfindingSuite extends TestSuite {
                 net.minecraft.world.entity.item.ItemEntity item =
                         new net.minecraft.world.entity.item.ItemEntity(
                                 (net.minecraft.server.level.ServerLevel) sp.level(),
-                                sp.getX() + 3.0, sp.getY() + 0.5, sp.getZ(),
+                                sp.getX() + 16.0, sp.getY() + 0.5, sp.getZ(),
                                 new net.minecraft.world.item.ItemStack(
                                         net.minecraft.world.item.Items.OAK_LOG));
                 item.setPickUpDelay(0);
@@ -208,6 +341,14 @@ public class PathfindingSuite extends TestSuite {
                 "control " + BOT_A + " mine minecraft:oak_log"));
         ctx.await("mine task active", () -> ctx.bot() != null
                 && ctx.bot().navigate().isActive(), 100);
+        // 真移动验证：16 格外不移动就永远捡不到——假人必须真的走过去
+        ctx.await("bot moved toward drop (>2 blocks)", () -> ctx.bot() != null
+                && ctx.bot().getLocalPlayer() != null
+                && distanceFromStart(ctx) > 2.0, 600);
+        ctx.check("mine moved to pick up", () -> ctx.bot() != null
+                && ctx.bot().getLocalPlayer() != null
+                && distanceFromStart(ctx) > 2.0, () -> "dist=" + distanceFromStart(ctx)
+                + " start=" + this.startPos + " feet=" + ctx.bot().getLocalPlayer().blockPosition());
         ctx.await("oak_log picked up", () -> ctx.bot() != null
                 && ctx.bot().getLocalPlayer() != null
                 && hasItem(ctx, net.minecraft.world.item.Items.OAK_LOG), 100000);

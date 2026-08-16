@@ -44,6 +44,8 @@ dependencies {
         common sourceSet.output
         shadowCommon sourceSet.output
     }
+    // ModMenu 模组列表入口（可选依赖：BaritoneModMenuIntegration 引用 ModMenuApi）
+    compileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
     include "dev.babbaj:nether-pathfinder:${project.nether_pathfinder_version}"
 }
 

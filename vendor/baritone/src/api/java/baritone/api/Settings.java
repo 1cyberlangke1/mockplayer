@@ -1665,6 +1665,19 @@ public final class Settings {
         settingTypes = Collections.unmodifiableMap(tmpSettingTypes);
     }
 
+    /** 复制源 settings 的当前值到本实例（per-instance 继承全局默认用；按小写名匹配，缺的保持默认）。 */
+    public void copyFrom(Settings source) {
+        for (Setting<?> setting : this.allSettings) {
+            Setting<?> src = source.byLowerName.get(
+                    setting.getName().toLowerCase(java.util.Locale.ROOT));
+            if (src != null && setting.getValueClass().equals(src.getValueClass())) {
+                @SuppressWarnings("unchecked")
+                Setting<Object> target = (Setting<Object>) setting;
+                target.value = src.value;
+            }
+        }
+    }
+
     @SuppressWarnings("unchecked")
     public <T> List<Setting<T>> getAllValuesByType(Class<T> cla$$) {
         List<Setting<T>> result = new ArrayList<>();

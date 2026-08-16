@@ -109,15 +109,12 @@ public class ConfigSuite extends TestSuite {
             ctx.checkNow("debug overlay unknown enum falls back",
                     ModConfigIO.load(cfgFile).getDebugOverlayMode()
                             == com.mockplayer.config.RenderMode.F3_ONLY);
-            writeConfigRaw("{\"navigateRenderMode\": \"ALWAYS\", \"navigatePathTimeoutMs\": 12345}");
+            // 行为项已归 baritone 全局 Settings（settings.txt），ModConfig 只留总开关 + 渲染三态
+            writeConfigRaw("{\"navigateRenderMode\": \"ALWAYS\", \"navigateEnabled\": false}");
             ModConfig navLoaded = ModConfigIO.load(cfgFile);
             ctx.checkNow("navigate render mode hand-edit", navLoaded.getNavigateRenderMode()
                     == com.mockplayer.config.RenderMode.ALWAYS);
-            ctx.checkNow("navigate timeout hand-edit", navLoaded.getNavigatePathTimeoutMs() == 12345);
-            writeConfigRaw("{\"navigatePathTimeoutMs\": 999999}");
-            ctx.checkNow("navigate timeout out-of-range falls back",
-                    ModConfigIO.load(cfgFile).getNavigatePathTimeoutMs()
-                            == ModConfig.DEFAULT_NAVIGATE_PATH_TIMEOUT_MS);
+            ctx.checkNow("navigate enabled hand-edit", !navLoaded.isNavigateEnabled());
             writeConfigRaw("{\"payloadLogLimit\": 99999, \"payloadSendLogLimit\": 0,"
                     + "\"payloadInterceptEnabled\": \"x\", \"payloadSendLogEnabled\": \"x\","
                     + "\"payloadPassthroughNamespaces\": [\" mod_a \", \"mod_a\", \"\", 3]}");
@@ -286,10 +283,6 @@ public class ConfigSuite extends TestSuite {
                 && Double.compare(a.getEventMoveSampleDistance(), b.getEventMoveSampleDistance()) == 0
                 && a.getDebugOverlayMode() == b.getDebugOverlayMode()
                 && a.isNavigateEnabled() == b.isNavigateEnabled()
-                && a.isNavigateAllowSprint() == b.isNavigateAllowSprint()
-                && a.isNavigateAllowBreak() == b.isNavigateAllowBreak()
-                && a.isNavigateAllowPlace() == b.isNavigateAllowPlace()
-                && a.getNavigatePathTimeoutMs() == b.getNavigatePathTimeoutMs()
                 && a.getNavigateRenderMode() == b.getNavigateRenderMode()
                 && a.getGuiBlur() == b.getGuiBlur()
                 && Float.compare(a.getGuiOpacity(), b.getGuiOpacity()) == 0
