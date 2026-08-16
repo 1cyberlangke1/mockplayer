@@ -74,10 +74,22 @@ allprojects {
             name = 'babbaj-repo'
             url = 'https://babbaj.github.io/maven/'
         }
+        // YACL 官方 Maven（可选配置界面库，与 mockplayer 主项目一致）
+        maven {
+            name = 'isxander-repo'
+            url = 'https://maven.isxander.dev/releases'
+        }
+        // ModMenu 官方 Maven（Fabric 可选模组列表入口，与 mockplayer 主项目一致）
+        maven {
+            name = 'terraformersmc-repo'
+            url = 'https://maven.terraformersmc.com/releases'
+        }
     }
 
     dependencies {
         compileOnly "org.spongepowered:mixin:${project.mixin_version}"
+        // YACL 可选配置界面（BaritoneConfigScreen 编译期可见；运行期由宿主环境按需提供）
+        compileOnly "dev.isxander:yet-another-config-lib:${rootProject.yacl_version}-fabric"
         compileOnly "org.ow2.asm:asm:${project.asm_version}"
 
         implementation "dev.babbaj:nether-pathfinder:${project.nether_pathfinder_version}"

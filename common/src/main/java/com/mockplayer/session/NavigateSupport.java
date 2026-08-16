@@ -3,21 +3,25 @@ package com.mockplayer.session;
 import com.mockplayer.baritone.api.IBaritone;
 import com.mockplayer.baritone.api.Settings;
 
-import com.mockplayer.config.ModConfig;
+import com.mockplayer.baritone.api.BaritoneAPI;
 import com.mockplayer.config.MockplayerConfig;
 import com.mockplayer.config.RenderMode;
 
 import net.minecraft.client.Minecraft;
-
 import java.util.List;
 
 /**
- * 寻路配置接线（common）：全局 ModConfig + per-bot 覆盖 → 假人 Baritone Settings；
+ * 寻路配置接线（common）：全局 baritone Settings（settings.txt）+ per-bot 覆盖 → 假人实例 Settings；
  * 渲染三态（navigateRenderMode，全局）经 {@link com.mockplayer.baritone.utils.RenderGate}
  * 实时判定（PathRenderer 每帧查询），无缓存无每 tick 同步。
  *
- * 输入：MockplayerConfig.get() + FakeSession.navigateOverrides
+ * 输入：BaritoneAPI.getSettings()（全局默认，settings.txt 持久化）+ FakeSession.navigateOverrides
  * 输出：baritone.settings() 各 Setting.value（热生效：Baritone 每 tick/每帧直接读 value）
+ *
+ * 全局行为项（allowSprint/allowBreak/.../pathTimeoutMs/日志开关）归 baritone 侧，由
+ * BaritoneConfigScreen（YACL）或手改 settings.txt 修改；本类只做「全局 → 实例」继承
+ * （copyFrom）+ per-bot 覆盖。假人创建时继承全局，之后全局变更对已存在假人由
+ * 配置界面保存传播（copyFrom 全部实例）或 config set/reset 覆盖。
  */
 public final class NavigateSupport {
 
@@ -31,37 +35,34 @@ public final class NavigateSupport {
     private NavigateSupport() {
     }
 
+    /** pathTimeoutMs 合法范围（baritone primaryTimeoutMS 无原生范围，命令侧收窄）。 */
+    private static final int MIN_PATH_TIMEOUT_MS = 500;
+    private static final int MAX_PATH_TIMEOUT_MS = 60000;
+
     /** 读取假人生效配置值（per-bot 覆盖优先，否则全局默认；未知 key 返回 null）。 */
     public static Object effectiveValue(FakeSession session, String key) {
         Object override = session.getNavigateOverride(key);
         if (override != null) {
             return override;
         }
-        ModConfig cfg = MockplayerConfig.get();
+        Settings g = BaritoneAPI.getSettings();
         return switch (key) {
-            case "enabled" -> cfg.isNavigateEnabled();
-            case "allowSprint" -> cfg.isNavigateAllowSprint();
-            case "allowBreak" -> cfg.isNavigateAllowBreak();
-            case "allowPlace" -> cfg.isNavigateAllowPlace();
-            case "allowParkour" -> cfg.isNavigateAllowParkour();
-            case "allowDiagonal" -> cfg.isNavigateAllowDiagonal();
-            case "avoidance" -> cfg.isNavigateAvoidance();
-            case "preferSilkTouch" -> cfg.isNavigatePreferSilkTouch();
-            case "mineScanDroppedItems" -> cfg.isNavigateMineScanDroppedItems();
-            case "pathTimeoutMs" -> cfg.getNavigatePathTimeoutMs();
-            case "logToChat" -> baritoneBool(session, s -> s.logToChat.value);
-            case "logDebugToChat" -> baritoneBool(session, s -> s.logDebugToChat.value);
-            case "logNotificationToChat" -> baritoneBool(session, s -> s.logNotificationToChat.value);
-            case "logToastToChat" -> baritoneBool(session, s -> s.logToastToChat.value);
+            case "enabled" -> MockplayerConfig.get().isNavigateEnabled();
+            case "allowSprint" -> g.allowSprint.value;
+            case "allowBreak" -> g.allowBreak.value;
+            case "allowPlace" -> g.allowPlace.value;
+            case "allowParkour" -> g.allowParkour.value;
+            case "allowDiagonal" -> g.allowDiagonalAscend.value;
+            case "avoidance" -> g.avoidance.value;
+            case "preferSilkTouch" -> g.preferSilkTouch.value;
+            case "mineScanDroppedItems" -> g.mineScanDroppedItems.value;
+            case "pathTimeoutMs" -> g.primaryTimeoutMS.value;
+            case "logToChat" -> g.logToChat.value;
+            case "logDebugToChat" -> g.logDebugToChat.value;
+            case "logNotificationToChat" -> g.logNotificationToChat.value;
+            case "logToastToChat" -> g.logToastToChat.value;
             default -> null;
         };
-    }
-
-    /** baritone settings 布尔读取（per-instance；无实例回退 false）。 */
-    private static Object baritoneBool(FakeSession session,
-                                       java.util.function.Function<Settings, Boolean> getter) {
-        IBaritone b = session.getBaritone();
-        return b != null ? getter.apply(b.settings()) : Boolean.FALSE;
     }
 
     /** 解析 config set 的字符串值（布尔/整数；非法返回 null）。 */
@@ -69,8 +70,7 @@ public final class NavigateSupport {
         if ("pathTimeoutMs".equals(key)) {
             try {
                 int v = Integer.parseInt(raw.trim());
-                return v >= ModConfig.MIN_NAVIGATE_PATH_TIMEOUT_MS
-                        && v <= ModConfig.MAX_NAVIGATE_PATH_TIMEOUT_MS ? v : null;
+                return v >= MIN_PATH_TIMEOUT_MS && v <= MAX_PATH_TIMEOUT_MS ? v : null;
             } catch (NumberFormatException e) {
                 return null;
             }
@@ -84,25 +84,6 @@ public final class NavigateSupport {
         return null;
     }
 
-    /** 直接写 baritone settings 的 key（日志开关等；返回 true 表示已处理，不经过 per-bot override）。 */
-    public static boolean applyDirectSetting(FakeSession session, String key, Object value) {
-        IBaritone b = session != null ? session.getBaritone() : null;
-        if (b == null) {
-            return false;
-        }
-        Settings s = b.settings();
-        switch (key) {
-            case "logToChat" -> s.logToChat.value = Boolean.TRUE.equals(value);
-            case "logDebugToChat" -> s.logDebugToChat.value = Boolean.TRUE.equals(value);
-            case "logNotificationToChat" -> s.logNotificationToChat.value = Boolean.TRUE.equals(value);
-            case "logToastToChat" -> s.logToastToChat.value = Boolean.TRUE.equals(value);
-            default -> {
-                return false;
-            }
-        }
-        return true;
-    }
-
     /** 应用寻路配置到假人 baritone 实例（创建时 / 配置热重载 / config set 后调用）。 */
     public static void applyToSession(FakeSession session) {
         IBaritone baritone = session.getBaritone();
@@ -110,6 +91,8 @@ public final class NavigateSupport {
             return;
         }
         Settings settings = baritone.settings();
+        // 先继承全局（settings.txt 默认），再 per-bot 覆盖（navigateOverrides 命中优先）
+        settings.copyFrom(BaritoneAPI.getSettings());
         settings.allowSprint.value = Boolean.TRUE.equals(effectiveValue(session, "allowSprint"));
         settings.allowBreak.value = Boolean.TRUE.equals(effectiveValue(session, "allowBreak"));
         settings.allowPlace.value = Boolean.TRUE.equals(effectiveValue(session, "allowPlace"));

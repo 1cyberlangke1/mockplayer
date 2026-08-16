@@ -17,9 +17,29 @@
 
 package com.mockplayer.baritone.launch;
 
+import com.mockplayer.baritone.gui.BaritoneConfigScreenFactory;
+import com.mockplayer.baritone.gui.BaritoneMissingYaclScreen;
+
 import net.neoforged.api.distmarker.Dist;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 
 @Mod(value = "mockplayer_baritone", dist = Dist.CLIENT)
 public class BaritoneForgeModXD {
+
+    /** YACL 可选：缺 YACL 时模组列表不出现「配置」按钮，配置仍可手改 settings.txt（零崩溃）。 */
+    public BaritoneForgeModXD(ModContainer container) {
+        if (ModList.get().isLoaded("yet_another_config_lib_v3")) {
+            container.registerExtensionPoint(IConfigScreenFactory.class,
+                    (java.util.function.Supplier<IConfigScreenFactory>)
+                            () -> (modContainer, parent) -> {
+                                // 反射桥：类加载验证不直接引用 YACL 类，缺 YACL 也不会 NoClassDefFoundError
+                                net.minecraft.client.gui.screens.Screen screen =
+                                        BaritoneConfigScreenFactory.create(parent);
+                                return screen != null ? screen : new BaritoneMissingYaclScreen(parent);
+                            });
+        }
+    }
 }

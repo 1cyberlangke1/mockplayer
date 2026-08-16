@@ -142,10 +142,11 @@ public final class MineProcess extends BaritoneProcessHelper implements IMinePro
         }
         PathingCommand command = updateGoal();
         if (command == null) {
-            // none in range
-            // maybe say something in chat? (ahem impact)
-            cancel();
-            return null;
+            // 无已知目标：不取消——首次 rescan 是异步的（executor 线程扫区块），
+            // 首 tick 立即 cancel 会在 rescan 完成前杀死进程：dev 超平坦扫描快侥幸
+            // 通过，生产真实世界扫描慢必现「mine 完全不动」。用 REQUEST_PAUSE 保持
+            // 进程等待扫描结果；真的找不到由 rescan 自行 cancel + 反馈。
+            return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
         }
         return command;
     }
@@ -240,12 +241,28 @@ public final class MineProcess extends BaritoneProcessHelper implements IMinePro
         List<BlockPos> dropped = droppedItemsScan();
         List<BlockPos> locs = searchWorld(context, filter, settings().mineMaxOreLocationsCount.value, already, blacklist, dropped);
         locs.addAll(dropped);
-        if (locs.isEmpty() && !settings().exploreForBlocks.value) {
-            logDirect(Component.translatableEscape("baritone.log.mine.no_locations", filter));
-            if (settings().notificationOnMineFail.value) {
-                logNotification(Component.translatableEscape("baritone.log.mine.no_locations", filter), true);
+        // 竞态防护：rescan 是异步的（executor 线程），执行期间用户可能已切换任务
+        // （再次 mine 别的方块 / pathstop / 新命令）——this.filter 已被替换成新对象时，
+        // 本 rescan 的「扫空/扫到」结论对新任务无效：绝不 cancel、绝不覆盖 knownOreLocations。
+        // （回归实测：mine diamond_ore 的旧 rescan 扫空后 cancel() 把刚启动的 mine dirt
+        //   任务杀死 → 假人完全不动；生产真实世界扫描慢，旧线程存活久，竞态必现）
+        if (this.filter != filter) {
+            return;
+        }
+        // mockplayer 不做 exploreForBlocks 探索乱跑（updateGoal 已移除 GoalRunAway）：
+        // 扫空即权威取消（不依赖原版 explore=true 时的「探索等待」，否则无目标任务永不结束）。
+        if (locs.isEmpty()) {
+            // 区块未加载时扫描结果空 ≠ 世界上没有目标：假人刚进世界/刚传送时
+            // 周围区块可能还没同步完，此时取消会让 mine 在区块就绪前死掉。
+            // 脚下 chunk 已加载仍扫不到 → 真没有，反馈 + 取消。
+            if (context.bsi.worldContainsLoadedChunk(
+                    ctx.playerFeet().getX(), ctx.playerFeet().getZ())) {
+                logDirect(Component.translatableEscape("baritone.log.mine.no_locations", filter));
+                if (settings().notificationOnMineFail.value) {
+                    logNotification(Component.translatableEscape("baritone.log.mine.no_locations", filter), true);
+                }
+                cancel();
             }
-            cancel();
             return;
         }
         knownOreLocations = locs;

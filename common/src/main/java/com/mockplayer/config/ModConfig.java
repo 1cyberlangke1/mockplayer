@@ -63,25 +63,12 @@ public class ModConfig {
     /** 假人 F3 信息标签显示三态（替换布尔 debugOverlayEnabled；默认 F3_ONLY 与原行为等价）。 */
     private RenderMode debugOverlayMode = RenderMode.F3_ONLY;
 
-    // ===== 寻路段（行为项 per-bot 可覆盖；渲染三态全局）=====
+    // ===== 寻路段（行为项归 baritone 全局 Settings/settings.txt，per-bot 可覆盖；渲染三态全局）=====
 
     /** 假人寻路接线默认开关。 */
     public static final boolean DEFAULT_NAVIGATE_ENABLED = true;
-    /** 寻路路径超时（ms）范围。 */
-    public static final int DEFAULT_NAVIGATE_PATH_TIMEOUT_MS = 2000;
-    public static final int MIN_NAVIGATE_PATH_TIMEOUT_MS = 500;
-    public static final int MAX_NAVIGATE_PATH_TIMEOUT_MS = 60000;
 
     private boolean navigateEnabled = DEFAULT_NAVIGATE_ENABLED;
-    private boolean navigateAllowSprint = true;
-    private boolean navigateAllowBreak = true;
-    private boolean navigateAllowPlace = true;
-    private boolean navigateAllowParkour = false;
-    private boolean navigateAllowDiagonal = false;
-    private boolean navigateAvoidance = false;
-    private boolean navigatePreferSilkTouch = false;
-    private boolean navigateMineScanDroppedItems = true;
-    private int navigatePathTimeoutMs = DEFAULT_NAVIGATE_PATH_TIMEOUT_MS;
     /** 寻路路径/目标渲染三态（全局，主玩家视角；YACL GUI 可配）。 */
     private RenderMode navigateRenderMode = RenderMode.F3_ONLY;
 
@@ -229,78 +216,6 @@ public class ModConfig {
         this.navigateEnabled = navigateEnabled;
     }
 
-    public boolean isNavigateAllowSprint() {
-        return this.navigateAllowSprint;
-    }
-
-    public void setNavigateAllowSprint(boolean navigateAllowSprint) {
-        this.navigateAllowSprint = navigateAllowSprint;
-    }
-
-    public boolean isNavigateAllowBreak() {
-        return this.navigateAllowBreak;
-    }
-
-    public void setNavigateAllowBreak(boolean navigateAllowBreak) {
-        this.navigateAllowBreak = navigateAllowBreak;
-    }
-
-    public boolean isNavigateAllowPlace() {
-        return this.navigateAllowPlace;
-    }
-
-    public void setNavigateAllowPlace(boolean navigateAllowPlace) {
-        this.navigateAllowPlace = navigateAllowPlace;
-    }
-
-    public boolean isNavigateAllowParkour() {
-        return this.navigateAllowParkour;
-    }
-
-    public void setNavigateAllowParkour(boolean navigateAllowParkour) {
-        this.navigateAllowParkour = navigateAllowParkour;
-    }
-
-    public boolean isNavigateAllowDiagonal() {
-        return this.navigateAllowDiagonal;
-    }
-
-    public void setNavigateAllowDiagonal(boolean navigateAllowDiagonal) {
-        this.navigateAllowDiagonal = navigateAllowDiagonal;
-    }
-
-    public boolean isNavigateAvoidance() {
-        return this.navigateAvoidance;
-    }
-
-    public void setNavigateAvoidance(boolean navigateAvoidance) {
-        this.navigateAvoidance = navigateAvoidance;
-    }
-
-    public boolean isNavigatePreferSilkTouch() {
-        return this.navigatePreferSilkTouch;
-    }
-
-    public void setNavigatePreferSilkTouch(boolean navigatePreferSilkTouch) {
-        this.navigatePreferSilkTouch = navigatePreferSilkTouch;
-    }
-
-    public boolean isNavigateMineScanDroppedItems() {
-        return this.navigateMineScanDroppedItems;
-    }
-
-    public void setNavigateMineScanDroppedItems(boolean navigateMineScanDroppedItems) {
-        this.navigateMineScanDroppedItems = navigateMineScanDroppedItems;
-    }
-
-    public int getNavigatePathTimeoutMs() {
-        return this.navigatePathTimeoutMs;
-    }
-
-    public void setNavigatePathTimeoutMs(int navigatePathTimeoutMs) {
-        this.navigatePathTimeoutMs = navigatePathTimeoutMs;
-    }
-
     public RenderMode getNavigateRenderMode() {
         return this.navigateRenderMode;
     }
@@ -413,8 +328,6 @@ public class ModConfig {
                 MIN_EVENT_TICK_SAMPLE_INTERVAL, MAX_EVENT_TICK_SAMPLE_INTERVAL, DEFAULT_EVENT_TICK_SAMPLE_INTERVAL);
         this.eventMoveSampleDistance = clampDouble(this.eventMoveSampleDistance,
                 MIN_EVENT_MOVE_SAMPLE_DISTANCE, MAX_EVENT_MOVE_SAMPLE_DISTANCE, DEFAULT_EVENT_MOVE_SAMPLE_DISTANCE);
-        this.navigatePathTimeoutMs = clampInt(this.navigatePathTimeoutMs,
-                MIN_NAVIGATE_PATH_TIMEOUT_MS, MAX_NAVIGATE_PATH_TIMEOUT_MS, DEFAULT_NAVIGATE_PATH_TIMEOUT_MS);
         if (this.debugOverlayMode == null) {
             this.debugOverlayMode = RenderMode.F3_ONLY;
         }
