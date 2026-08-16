@@ -58,6 +58,8 @@ processResources {
 shadowJar {
     configurations = [project.configurations.shadowCommon]
     archiveClassifier.set "dev-shadow"
+    // LGPL-3.0 §4：目标代码分发需随附许可证全文
+    from(rootProject.file("LICENSE")) { into "/" }
 }
 
 remapJar {
