@@ -89,6 +89,7 @@
     "commands.mockplayer.control.action.elytra": "elytra flight to coordinates",
     "commands.mockplayer.control.action.mine": "mine block",
     "commands.mockplayer.control.action.follow": "follow entity",
+    "commands.mockplayer.control.action.help": "show help",
     "commands.mockplayer.control.follow.not_found": "No %s entity found near %s",
     "commands.mockplayer.control.mode.invalid": "Invalid movement mode %s (walk|elytra)",
     "commands.mockplayer.control.action.config": "navigate config",

@@ -13,7 +13,8 @@ import java.util.List;
 
 /**
  * 寻路配置接线（common）：全局 ModConfig + per-bot 覆盖 → 假人 Baritone Settings；
- * 渲染三态（navigateRenderMode，全局）每 tick 同步所有假人实例。
+ * 渲染三态（navigateRenderMode，全局）经 {@link com.mockplayer.baritone.utils.RenderGate}
+ * 实时判定（PathRenderer 每帧查询），无缓存无每 tick 同步。
  *
  * 输入：MockplayerConfig.get() + FakeSession.navigateOverrides
  * 输出：baritone.settings() 各 Setting.value（热生效：Baritone 每 tick/每帧直接读 value）
@@ -88,49 +89,22 @@ public final class NavigateSupport {
                 applyToSession(session);
             }
         }
-        syncRenderNow();
     }
 
-    /** 上次同步的渲染开关（值未变时跳过遍历，零开销）。 */
-    private static boolean lastRender;
+    /** 渲染闸门是否已注册（幂等，只注册一次）。 */
+    private static boolean renderGateRegistered;
 
-    /** 每 tick 同步渲染三态（F3_ONLY 需跟随 F3 开关；SessionManager.tick 调用）。 */
-    public static void syncRender() {
-        ModConfig cfg = MockplayerConfig.get();
-        RenderMode mode = cfg.getNavigateRenderMode();
-        boolean render = switch (mode) {
-            case ALWAYS -> true;
-            case OFF -> false;
-            case F3_ONLY -> Minecraft.getInstance().getDebugOverlay().showDebugScreen();
-        };
-        if (render == NavigateSupport.lastRender) {
+    /** 注册渲染闸门（SessionManager.tick 调用）：PathRenderer 每帧实时判定三态，无缓存无同步。 */
+    public static void ensureRenderGate() {
+        if (NavigateSupport.renderGateRegistered) {
             return;
         }
-        syncRenderNow();
-    }
-
-    /** 把当前渲染开关写入全部假人实例 settings（renderPath/renderGoal 同值）。 */
-    private static void syncRenderNow() {
-        ModConfig cfg = MockplayerConfig.get();
-        boolean render = switch (cfg.getNavigateRenderMode()) {
-            case ALWAYS -> true;
-            case OFF -> false;
-            case F3_ONLY -> Minecraft.getInstance().getDebugOverlay().showDebugScreen();
-        };
-        NavigateSupport.lastRender = render;
-        for (String name : SessionManager.getInstance().getSessionNames()) {
-            FakeSession session = SessionManager.getInstance().getSession(name);
-            IBaritone baritone = session != null ? session.getBaritone() : null;
-            if (baritone == null) {
-                continue;
-            }
-            Settings settings = baritone.settings();
-            if (settings.renderPath.value != render) {
-                settings.renderPath.value = render;
-            }
-            if (settings.renderGoal.value != render) {
-                settings.renderGoal.value = render;
-            }
-        }
+        NavigateSupport.renderGateRegistered = true;
+        com.mockplayer.baritone.utils.RenderGate.register(() ->
+                switch (MockplayerConfig.get().getNavigateRenderMode()) {
+                    case ALWAYS -> true;
+                    case OFF -> false;
+                    case F3_ONLY -> Minecraft.getInstance().getDebugOverlay().showDebugScreen();
+                });
     }
 }

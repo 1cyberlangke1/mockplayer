@@ -3,7 +3,7 @@
   "id": "mockplayer_baritone",
   "version": "${version}",
 
-  "name": "Baritone",
+  "name": "baritone-mockplayer",
   "description": "Google Maps for Blockgame",
   "authors": [
     "leijurv", "Brady"

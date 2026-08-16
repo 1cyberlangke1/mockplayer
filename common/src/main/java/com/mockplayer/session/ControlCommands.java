@@ -517,7 +517,9 @@ public class ControlCommands {
         }
         Entity entity = bot.getEntitiesNear(16.0).stream()
                 .filter(e -> entityTypeKey(e).equalsIgnoreCase(target))
-                .findFirst().orElse(null);
+                // 多个同类实体（如多个玩家）时跟随最近的，避免顺序不定
+                .min(Comparator.comparingDouble(e -> e.distanceToSqr(bot.getLocalPlayer())))
+                .orElse(null);
         if (entity == null) {
             return fail("commands.mockplayer.control.follow.not_found", target, playerName(name));
         }

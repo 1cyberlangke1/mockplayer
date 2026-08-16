@@ -89,6 +89,7 @@
     "commands.mockplayer.control.action.elytra": "鞘翅飞往坐标",
     "commands.mockplayer.control.action.mine": "挖方块",
     "commands.mockplayer.control.action.follow": "跟随实体",
+    "commands.mockplayer.control.action.help": "显示帮助",
     "commands.mockplayer.control.follow.not_found": "在 %2$s 附近没有找到 %1$s 实体",
     "commands.mockplayer.control.mode.invalid": "移动方式 %s 非法（walk|elytra）",
     "commands.mockplayer.control.action.config": "寻路配置",

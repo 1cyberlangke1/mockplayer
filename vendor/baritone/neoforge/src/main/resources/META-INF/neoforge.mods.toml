@@ -17,7 +17,7 @@ modId="mockplayer_baritone" #mandatory
 # The version number of the mod - there's a few well known ${} variables useable here or just hardcode it
 version="${version}" #mandatory
  # A display name for the mod
-displayName="Baritone" #mandatory
+displayName="baritone-mockplayer" #mandatory
 # A URL for the "homepage" for this mod, displayed in the mod UI
 displayURL="https://github.com/cabaletta/baritone" #optional
 # A file name (in the root of the mod JAR) containing a logo for display

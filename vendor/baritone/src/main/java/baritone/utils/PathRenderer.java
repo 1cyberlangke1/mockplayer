@@ -84,12 +84,13 @@ public final class PathRenderer implements IRenderer {
             return;
         }
 
-        if (goal != null && ctx.settings().renderGoal.value) {
-            drawGoal(event.getModelViewStack(), ctx, goal, partialTicks, ctx.settings().colorGoalBox.value);
+        // 渲染闸门（主项目三态配置，实时判定；替代原 settings 同步方案）
+        if (!RenderGate.shouldRender()) {
+            return;
         }
 
-        if (!ctx.settings().renderPath.value) {
-            return;
+        if (goal != null) {
+            drawGoal(event.getModelViewStack(), ctx, goal, partialTicks, ctx.settings().colorGoalBox.value);
         }
 
         PathExecutor current = behavior.getCurrent(); // this should prevent most race conditions?
