@@ -180,6 +180,21 @@ public final class BaritoneNavigator implements BotNavigator {
     }
 
     @Override
+    public BotNavigator mineByType(String blockId) {
+        IBaritone b = this.baritone;
+        if (b == null) {
+            return this;
+        }
+        b.getPathingBehavior().cancelEverything();
+        b.getMineProcess().mine(1, new BlockOptionalMetaLookup(blockId));
+        this.task = NavigatorTask.MINE;
+        // 目标由 MineProcess 按类型就近寻找，无固定坐标
+        this.goal = null;
+        this.bot.setNavigating(true);
+        return this;
+    }
+
+    @Override
     public BotNavigator elytra(BlockPos target) {
         IBaritone b = this.baritone;
         if (b == null) {

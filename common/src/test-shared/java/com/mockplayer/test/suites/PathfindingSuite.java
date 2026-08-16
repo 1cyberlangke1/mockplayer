@@ -330,14 +330,18 @@ public class PathfindingSuite extends TestSuite {
                     ctx.bot().navigate().currentTask() == NavigatorTask.ELYTRA);
             ctx.bot().navigate().stop();
             ctx.checkNow("elytra stopped", !ctx.bot().navigate().isActive());
-            // mine：任务注册 + stop 复位（不真挖完）
-            BlockPos below = base.below();
+            // mine：按类型挖矿任务注册 + stop 复位（不真挖完）
             ctx.checkNow("mine command ok", ctx.platform().executeClientCommand(
-                    "control " + BOT_A + " mine " + below.getX() + " " + below.getY() + " " + below.getZ()));
+                    "control " + BOT_A + " mine dirt"));
             ctx.checkNow("mine task via command",
                     ctx.bot().navigate().currentTask() == NavigatorTask.MINE);
             ctx.bot().navigate().stop();
             ctx.checkNow("mine stopped", !ctx.bot().navigate().isActive());
+            // 未知方块：失败反馈且不启动任务
+            ctx.checkNow("mine unknown block no throw", ctx.platform().executeClientCommand(
+                    "control " + BOT_A + " mine nonexistent_block_xyz"));
+            ctx.checkNow("mine unknown block keeps task state",
+                    ctx.bot().navigate().currentTask() == NavigatorTask.NONE);
             // follow：跟随附近村民；未知类型走失败反馈
             ctx.checkNow("follow command ok", ctx.platform().executeClientCommand(
                     "control " + BOT_A + " follow villager"));

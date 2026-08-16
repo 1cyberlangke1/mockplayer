@@ -104,6 +104,14 @@ public interface BotNavigator {
     BotNavigator mine(BlockPos target);
 
     /**
+     * 按方块类型挖矿（Baritone MineProcess：自动寻路到最近的该类方块、选工具、挖掘、拾取，一条龙）。
+     *
+     * @param blockId 方块注册表 id（如 "minecraft:diamond_ore"）
+     * @return this（链式）
+     */
+    BotNavigator mineByType(String blockId);
+
+    /**
      * 鞘翅飞往目标（ElytraProcess；需要假人装备鞘翅）。
      *
      * @param target 目标坐标
