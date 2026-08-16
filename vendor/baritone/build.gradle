@@ -74,6 +74,11 @@ allprojects {
             name = 'babbaj-repo'
             url = 'https://babbaj.github.io/maven/'
         }
+        // mockplayer P15：nether-pathfinder 改为本地自编译产物（C 侧防御修复后不再用
+        // 上游 maven 预编译版；构建顺序：先编 vendor/nether-pathfinder 产出 jar）
+        flatDir {
+            dirs "${rootProject.projectDir}/../nether-pathfinder/build/libs"
+        }
         // YACL 官方 Maven（可选配置界面库，与 mockplayer 主项目一致）
         maven {
             name = 'isxander-repo'

@@ -15,5 +15,7 @@ public enum NavigatorTask {
     /** 跟随实体。 */
     FOLLOW,
     /** 挖矿（Baritone MineProcess）。 */
-    MINE
+    MINE,
+    /** 鞘翅飞行。 */
+    ELYTRA
 }

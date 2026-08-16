@@ -49,6 +49,91 @@ public class PathfindingSuite extends TestSuite {
         test("mine 找方块并移动", this::mineFindsBlocks);
         test("mine 无目标方块不提前取消", this::mineNoTargetKeepsAlive);
         test("baritone 配置界面与全局继承", this::baritoneConfigScreenAndGlobal);
+        test("真飞 elytra 300 格平台", this::elytraRealFlight);
+    }
+
+    /** 测试 14（P15）：真飞——假人穿鞘翅 + 64 烟花，elytra 飞到起点 +300/+50/+300 的
+     *  10×10 石头平台（长超时）。真实触发 native pathFind（src 在固体方块内 → 防御
+     *  必须不崩）+ ElytraProcess 烟花加速导航 + 服务端飞行验证全链。 */
+    private void elytraRealFlight(TestContext ctx) {
+        ctx.run(() -> SuitesSupport.createBot(ctx, BOT_A));
+        ctx.await("lifecycle PLAYING", () -> ctx.bot() != null
+                && ctx.bot().getLifecycle() == BotLifecycle.PLAYING, 300);
+        SuitesSupport.awaitChunkLoaded(ctx);
+        // 固定空旷起点（消除 spawn 随机性）
+        ctx.run(() -> ctx.server().execute(() -> {
+            ctx.server().getCommands().performPrefixedCommand(
+                    ctx.server().createCommandSourceStack(), "tp " + BOT_A + " 100 4 100");
+        }));
+        ctx.await("bot teleported", () -> ctx.bot() != null
+                && ctx.bot().getLocalPlayer() != null
+                && ctx.bot().getLocalPlayer().blockPosition().equals(new BlockPos(100, 4, 100)), 200);
+        ctx.await("tp area chunk loaded", () -> ctx.bot() != null
+                && ctx.bot().getLevel() != null
+                && !ctx.bot().getLevel().getBlockState(new BlockPos(100, 3, 100)).isAir(), 300);
+        // 平台：起点 +300/+50/+300 → (400, 54, 400)，10×10 石头
+        ctx.run(() -> ctx.server().execute(() -> {
+            var src = ctx.server().createCommandSourceStack();
+            for (int dx = 0; dx < 10; dx++) {
+                for (int dz = 0; dz < 10; dz++) {
+                    ctx.server().getCommands().performPrefixedCommand(src,
+                            String.format("setblock %d %d %d minecraft:stone", 400 + dx, 54, 400 + dz));
+                }
+            }
+        }));
+        // 装备：服务端命令穿鞘翅（胸甲槽）+ 64 烟花（原版 /item 命令走完整同步链路）
+        SuitesSupport.give(ctx, BOT_A, "minecraft:firework_rocket 64");
+        ctx.run(() -> ctx.server().execute(() -> {
+            ctx.server().getCommands().performPrefixedCommand(
+                    ctx.server().createCommandSourceStack(),
+                    "item replace entity " + BOT_A + " armor.chest with minecraft:elytra");
+        }));
+        ctx.await("elytra + fireworks on client", () -> ctx.bot() != null
+                && ctx.bot().getLocalPlayer() != null
+                && ctx.bot().getLocalPlayer().getItemBySlot(net.minecraft.world.entity.EquipmentSlot.CHEST)
+                .is(net.minecraft.world.item.Items.ELYTRA)
+                && ctx.bot().getLocalPlayer().getInventory()
+                .countItem(net.minecraft.world.item.Items.FIREWORK_ROCKET) >= 1, 200);
+        // 把假人放到高空起飞点（平台方向的起点上空 +45）
+        ctx.run(() -> ctx.server().execute(() -> {
+            ctx.server().getCommands().performPrefixedCommand(
+                    ctx.server().createCommandSourceStack(), "tp " + BOT_A + " 100 49 100");
+        }));
+        ctx.await("bot in air", () -> ctx.bot() != null
+                && ctx.bot().getLocalPlayer() != null
+                && ctx.bot().getLocalPlayer().getY() > 40, 300);
+        // 模拟原版双击跳跃开鞘翅：flag + START_FALL_FLYING 包（服务端验证鞘翅装备）
+        ctx.run(() -> {
+            net.minecraft.client.player.LocalPlayer lp = ctx.bot().getLocalPlayer();
+            if (lp.tryToStartFallFlying()) {
+                lp.connection.send(new net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket(lp,
+                        net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket.Action.START_FALL_FLYING));
+            }
+        });
+        ctx.await("fall flying active", () -> ctx.bot() != null
+                && ctx.bot().getLocalPlayer() != null
+                && ctx.bot().getLocalPlayer().isFallFlying(), 100);
+        // 飞往平台中心 (405, 54, 405)——真实触发 native 寻路 + 烟花导航
+        ctx.run(() -> ctx.platform().executeClientCommand("control " + BOT_A + " elytra 405 54 405"));
+        // 长超时：接近平台（水平 < 10 且垂直差 < 25）或任务完成（到达/放弃）
+        ctx.await("elytra reached platform", () -> ctx.bot() != null
+                && ctx.bot().getLocalPlayer() != null
+                && (nearPlatform(ctx, 400, 54, 400)
+                || !ctx.bot().navigate().isActive()), 4800);
+        ctx.check("elytra actually near platform", () -> ctx.bot() != null
+                && ctx.bot().getLocalPlayer() != null
+                && nearPlatform(ctx, 400, 54, 400));
+        ctx.run(() -> ctx.bot().navigate().stop());
+        ctx.run(() -> MockplayerApi.bots().removeBot(BOT_A, "test"));
+    }
+
+    /** 假人是否在平台附近（水平 < 10 且垂直差 < 25）。 */
+    private static boolean nearPlatform(TestContext ctx, int px, int py, int pz) {
+        net.minecraft.client.player.LocalPlayer lp = ctx.bot().getLocalPlayer();
+        double dx = lp.getX() - (px + 4.5);
+        double dz = lp.getZ() - (pz + 4.5);
+        double dy = lp.getY() - py;
+        return Math.sqrt(dx * dx + dz * dz) < 10 && Math.abs(dy) < 25;
     }
 
     /** 测试 13：baritone 配置界面（YACL 反射桥可构造）+ 全局 Settings → 新假人
@@ -565,7 +650,7 @@ public class PathfindingSuite extends TestSuite {
                 nav.stop();
             }
 
-            // mode 切换：调用不抛 + 状态保留（仅 walk；鞘翅已移除）
+            // mode 切换：调用不抛 + 状态保留（WALK/ELYTRA；鞘翅已恢复）
             boolean modeThrew = false;
             try {
                 nav.mode(NavigationMode.WALK);
@@ -573,6 +658,21 @@ public class PathfindingSuite extends TestSuite {
                 modeThrew = true;
             }
             ctx.checkNow("mode switch no throw", !modeThrew);
+
+            // elytra：调用不抛 + 任务注册 ELYTRA + stop 复位（不真飞）。
+            // 注意：elytra() 会启动 ElytraProcess 异步路径计算，真实触发 native
+            // pathFind——src 在脚下固体方块内（历史崩溃点），防御生效则进程不崩。
+            boolean elytraThrew = false;
+            try {
+                nav.mode(NavigationMode.ELYTRA);
+                nav.elytra(base.offset(0, 20, 0));
+            } catch (Exception e) {
+                elytraThrew = true;
+            }
+            ctx.checkNow("elytra call no throw", !elytraThrew);
+            ctx.checkNow("elytra task registered", nav.currentTask() == NavigatorTask.ELYTRA);
+            nav.stop();
+            ctx.checkNow("elytra stopped", !nav.isActive());
 
             // mine（BlockPos）：任务注册 + stop 复位
             BlockPos below = base.below();
@@ -629,11 +729,13 @@ public class PathfindingSuite extends TestSuite {
                     "control " + BOT_A + " mode fly"));
             ctx.checkNow("mode invalid keeps task state",
                     ctx.bot().navigate().currentTask() == NavigatorTask.NONE);
-            // 鞘翅已移除：control elytra 命令不存在，执行失败且不启动任务
-            ctx.checkNow("elytra command removed", !ctx.platform().executeClientCommand(
+            // 鞘翅（P15 恢复）：control elytra 命令可执行 + 任务注册 ELYTRA。
+            // 目标在地下（超平坦 y=2 固体）——native findAir 防御生效，进程不崩；
+            // 任务可能随后失败复位（未装备鞘翅/目标不可达），此处只断接线。
+            ctx.checkNow("elytra command ok", ctx.platform().executeClientCommand(
                     "control " + BOT_A + " elytra 1 2 3"));
-            ctx.checkNow("elytra removed keeps task state",
-                    ctx.bot().navigate().currentTask() == NavigatorTask.NONE);
+            ctx.checkNow("elytra task via command",
+                    ctx.bot().navigate().currentTask() == NavigatorTask.ELYTRA);
             // mine：按类型挖矿任务注册 + stop 复位（不真挖完）
             ctx.checkNow("mine command ok", ctx.platform().executeClientCommand(
                     "control " + BOT_A + " mine dirt"));

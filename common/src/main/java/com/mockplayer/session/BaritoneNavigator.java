@@ -36,7 +36,7 @@ public final class BaritoneNavigator implements BotNavigator {
     private final BotImpl bot;
     /** 假人专属 Baritone 实例（未 PLAYING 时为 null；方法调用安全返回，无操作）。 */
     private final IBaritone baritone;
-    /** 移动模式（当前仅 WALK；鞘翅已移除）。 */
+    /** 移动模式（WALK/ELYTRA；goTo 按模式选择进程）。 */
     private NavigationMode mode = NavigationMode.WALK;
     /** 当前任务类型（tick 与进程状态同步）。 */
     private NavigatorTask task = NavigatorTask.NONE;
@@ -96,11 +96,17 @@ public final class BaritoneNavigator implements BotNavigator {
         return this;
     }
 
-    /** goTo：customGoalProcess（鞘翅已移除，模式仅 WALK）。 */
+    /** goTo 按当前模式分流：WALK → customGoalProcess；ELYTRA → elytraProcess。 */
     private void goTo(IBaritone b, BlockPos pos) {
-        b.getCustomGoalProcess().setGoalAndPath(new GoalBlock(pos));
-        this.task = NavigatorTask.GO_TO;
-        this.goal = pos;
+        if (this.mode == NavigationMode.ELYTRA) {
+            b.getElytraProcess().pathTo(pos);
+            this.task = NavigatorTask.GO_TO;
+            this.goal = pos;
+        } else {
+            b.getCustomGoalProcess().setGoalAndPath(new GoalBlock(pos));
+            this.task = NavigatorTask.GO_TO;
+            this.goal = pos;
+        }
     }
 
     /** 复合目标的第一个方块目标（查询用；没有方块目标返回 null）。 */
@@ -192,6 +198,20 @@ public final class BaritoneNavigator implements BotNavigator {
         return this;
     }
 
+    @Override
+    public BotNavigator elytra(BlockPos target) {
+        IBaritone b = this.baritone;
+        if (b == null) {
+            return this;
+        }
+        b.getPathingBehavior().cancelEverything();
+        b.getElytraProcess().pathTo(target);
+        this.task = NavigatorTask.ELYTRA;
+        this.goal = target;
+        this.bot.setNavigating(true);
+        return this;
+    }
+
     /**
      * 每 tick 与进程状态同步：任务自然结束（到达/放弃/挖完）时复位
      * 任务类型/目标/navigating 标志（BotImpl.tick 调用）。
@@ -206,9 +226,11 @@ public final class BaritoneNavigator implements BotNavigator {
             active = false;
         } else {
             active = switch (this.task) {
-                case GO_TO, GO_NEAR -> b.getCustomGoalProcess().isActive();
+                case GO_TO, GO_NEAR ->
+                        b.getCustomGoalProcess().isActive() || b.getElytraProcess().isActive();
                 case FOLLOW -> b.getFollowProcess().isActive();
                 case MINE -> b.getMineProcess().isActive();
+                case ELYTRA -> b.getElytraProcess().isActive();
                 default -> false;
             };
         }
