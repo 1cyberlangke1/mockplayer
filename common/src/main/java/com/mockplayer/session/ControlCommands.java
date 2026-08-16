@@ -368,11 +368,8 @@ public class ControlCommands {
                             integer("y", CommandSupport.coordY("commands.mockplayer.control.suggest.y")),
                             integer("z", CommandSupport.coordZ("commands.mockplayer.control.suggest.z")))),
                     ctx -> elytraCmd(name(ctx), i(ctx, "x"), i(ctx, "y"), i(ctx, "z"))),
-            spec("mine", variants(v(
-                            integer("x", CommandSupport.coordX("commands.mockplayer.control.suggest.x")),
-                            integer("y", CommandSupport.coordY("commands.mockplayer.control.suggest.y")),
-                            integer("z", CommandSupport.coordZ("commands.mockplayer.control.suggest.z")))),
-                    ctx -> mineCmd(name(ctx), i(ctx, "x"), i(ctx, "y"), i(ctx, "z"))),
+            spec("mine", variants(v(word("block", mineBlocks()))),
+                    ctx -> mineCmd(name(ctx), str(ctx, "block"))),
             spec("follow", variants(v(word("target", entityTypes()))),
                     ctx -> followCmd(name(ctx), str(ctx, "target"))),
             spec("config", variants(
@@ -489,8 +486,8 @@ public class ControlCommands {
         return success("elytra", name);
     }
 
-    /** /control mine：挖指定方块（Baritone MineProcess：寻路+选工具+挖掘+拾取一条龙）。 */
-    private static Component mineCmd(String name, int x, int y, int z) {
+    /** /control mine：按方块类型挖矿（Baritone MineProcess：自动找最近的该类方块+选工具+挖掘+拾取一条龙）。 */
+    private static Component mineCmd(String name, String block) {
         Component blocked = requirePlaying(name);
         if (blocked != null) {
             return blocked;
@@ -500,8 +497,23 @@ public class ControlCommands {
         if (disabled != null) {
             return disabled;
         }
-        bot.navigate().mine(new BlockPos(x, y, z));
+        String blockId = block.contains(":") ? block : "minecraft:" + block;
+        Identifier blockIdParsed = Identifier.tryParse(blockId);
+        if (blockIdParsed == null || !BuiltInRegistries.BLOCK.containsKey(blockIdParsed)) {
+            return fail("commands.mockplayer.control.mine.unknown_block", block);
+        }
+        bot.navigate().mineByType(blockId);
         return success("mine", name);
+    }
+
+    /** mine 方块参数补全：全部注册表方块 id（与原版 setblock 同源，动态不硬编码）。 */
+    public static <S extends SharedSuggestionProvider> SuggestionProvider<S> mineBlocks() {
+        return (ctx, builder) -> {
+            List<String> ids = BuiltInRegistries.BLOCK.keySet().stream()
+                    .map(Identifier::toString)
+                    .toList();
+            return SharedSuggestionProvider.suggest(ids, builder);
+        };
     }
 
     /** /control follow：跟随附近指定类型实体（取最近的匹配实体）。 */

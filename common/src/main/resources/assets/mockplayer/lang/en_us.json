@@ -91,6 +91,7 @@
     "commands.mockplayer.control.action.follow": "follow entity",
     "commands.mockplayer.control.action.help": "show help",
     "commands.mockplayer.control.follow.not_found": "No %s entity found near %s",
+    "commands.mockplayer.control.mine.unknown_block": "Unknown block %s (use a registry id like minecraft:diamond_ore)",
     "commands.mockplayer.control.mode.invalid": "Invalid movement mode %s (walk|elytra)",
     "commands.mockplayer.control.action.config": "navigate config",
     "commands.mockplayer.control.navigate.disabled": "Pathfinding is disabled for %s (enable with /control config set enabled true)",
