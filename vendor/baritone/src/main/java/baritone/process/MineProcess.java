@@ -17,6 +17,7 @@
 
 package com.mockplayer.baritone.process;
 
+import net.minecraft.network.chat.Component;
 import com.mockplayer.baritone.Baritone;
 import com.mockplayer.baritone.api.BaritoneAPI;
 import com.mockplayer.baritone.api.pathing.goals.*;
@@ -82,23 +83,23 @@ public final class MineProcess extends BaritoneProcessHelper implements IMinePro
                     .filter(stack -> filter.has(stack))
                     .mapToInt(ItemStack::getCount).sum();
             if (curr >= desiredQuantity) {
-                logDirect("Have " + curr + " valid items");
+                logDirect(Component.translatableEscape("baritone.log.mine.have_items", curr));
                 cancel();
                 return null;
             }
         }
         if (calcFailed) {
             if (!knownOreLocations.isEmpty() && settings().blacklistClosestOnFailure.value) {
-                logDirect("Unable to find any path to " + filter + ", blacklisting presumably unreachable closest instance...");
+                logDirect(Component.translatableEscape("baritone.log.mine.no_path_blacklist", filter));
                 if (settings().notificationOnMineFail.value) {
-                    logNotification("Unable to find any path to " + filter + ", blacklisting presumably unreachable closest instance...", true);
+                    logNotification(Component.translatableEscape("baritone.log.mine.no_path_blacklist", filter), true);
                 }
                 knownOreLocations.stream().min(Comparator.comparingDouble(ctx.playerFeet()::distSqr)).ifPresent(blacklist::add);
                 knownOreLocations.removeIf(blacklist::contains);
             } else {
-                logDirect("Unable to find any path to " + filter + ", canceling mine");
+                logDirect(Component.translatableEscape("baritone.log.mine.no_path_cancel", filter));
                 if (settings().notificationOnMineFail.value) {
-                    logNotification("Unable to find any path to " + filter + ", canceling mine", true);
+                    logNotification(Component.translatableEscape("baritone.log.mine.no_path_cancel", filter), true);
                 }
                 cancel();
                 return null;
@@ -240,9 +241,9 @@ public final class MineProcess extends BaritoneProcessHelper implements IMinePro
         List<BlockPos> locs = searchWorld(context, filter, settings().mineMaxOreLocationsCount.value, already, blacklist, dropped);
         locs.addAll(dropped);
         if (locs.isEmpty() && !settings().exploreForBlocks.value) {
-            logDirect("No locations for " + filter + " known, cancelling");
+            logDirect(Component.translatableEscape("baritone.log.mine.no_locations", filter));
             if (settings().notificationOnMineFail.value) {
-                logNotification("No locations for " + filter + " known, cancelling", true);
+                logNotification(Component.translatableEscape("baritone.log.mine.no_locations", filter), true);
             }
             cancel();
             return;
@@ -543,7 +544,7 @@ public final class MineProcess extends BaritoneProcessHelper implements IMinePro
                     .filter(e -> settings().allowBreakAnyway.value.contains(e.getBlock()))
                     .toArray(BlockOptionalMeta[]::new));
             if (f.blocks().isEmpty()) {
-                logDirect("Unable to mine when allowBreak is false and target block is not in allowBreakAnyway!");
+                logDirect(Component.translatableEscape("baritone.log.mine.allow_break_off"));
                 return null;
             }
             return f;

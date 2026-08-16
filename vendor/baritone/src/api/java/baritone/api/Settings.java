@@ -677,6 +677,14 @@ public final class Settings {
      * Print all the debug messages to chat
      */
     public final Setting<Boolean> chatDebug = new Setting<>(false);
+    /** 状态消息显示到游戏聊天（默认关；前缀 [baritone-mockplayer-<bot名>]）。 */
+    public final Setting<Boolean> logToChat = new Setting<>(false);
+    /** 调试消息显示到游戏聊天（默认关）。 */
+    public final Setting<Boolean> logDebugToChat = new Setting<>(false);
+    /** 桌面通知同时进聊天（默认关）。 */
+    public final Setting<Boolean> logNotificationToChat = new Setting<>(false);
+    /** Toast 同时进聊天（默认关）。 */
+    public final Setting<Boolean> logToastToChat = new Setting<>(false);
 
     /**
      * Render the path

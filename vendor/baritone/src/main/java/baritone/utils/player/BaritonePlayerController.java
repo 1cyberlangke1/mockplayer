@@ -42,7 +42,7 @@ import net.minecraft.world.phys.BlockHitResult;
 public final class BaritonePlayerController implements IPlayerController {
 
     private final Minecraft mc;
-    /** 绑定的假人 gameMode（null = primary 用 mc.gameMode；隔离铁律：假人不写主玩家）。 */
+    /** 绑定的假人 gameMode（null = 用 mc.gameMode）。 */
     private final MultiPlayerGameMode boundGameMode;
 
     public BaritonePlayerController(Minecraft mc) {
@@ -51,7 +51,7 @@ public final class BaritonePlayerController implements IPlayerController {
 
     /**
      * @param mc       Minecraft 单例
-     * @param gameMode 绑定的假人 gameMode（null = primary 用 mc.gameMode）
+     * @param gameMode 绑定的假人 gameMode（null = 用 mc.gameMode）
      */
     public BaritonePlayerController(Minecraft mc, MultiPlayerGameMode gameMode) {
         this.mc = mc;

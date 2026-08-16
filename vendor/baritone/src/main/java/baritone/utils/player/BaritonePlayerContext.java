@@ -39,9 +39,9 @@ public final class BaritonePlayerContext implements IPlayerContext {
     private final Baritone baritone;
     private final Minecraft mc;
     private final IPlayerController playerController;
-    /** 绑定的假人 player（null = primary：动态读 mc.player，跟随主玩家切换/重生）。 */
+    /** 绑定的假人 player（null = 动态读 mc.player）。 */
     private volatile LocalPlayer boundPlayer;
-    /** 绑定的假人 gameMode（null = primary：用 mc.gameMode）。 */
+    /** 绑定的假人 gameMode（null = 用 mc.gameMode）。 */
     private final MultiPlayerGameMode boundGameMode;
 
     public BaritonePlayerContext(Baritone baritone, Minecraft mc) {
@@ -49,13 +49,10 @@ public final class BaritonePlayerContext implements IPlayerContext {
     }
 
     /**
-     * 支持绑定指定 player/gameMode 的构造（假人实例用，隔离铁律：交互走假人自己的
-     * gameMode；primary 传 null/null 走 mc 动态引用）。
-     *
      * @param baritone 所属实例
      * @param mc       Minecraft 单例
-     * @param player   绑定的假人 player（null = primary 动态 mc.player）
-     * @param gameMode 绑定的假人 gameMode（null = primary 用 mc.gameMode）
+     * @param player   绑定的假人 player（null = 动态 mc.player）
+     * @param gameMode 绑定的假人 gameMode（null = 用 mc.gameMode）
      */
     public BaritonePlayerContext(Baritone baritone, Minecraft mc,
                                  LocalPlayer player, MultiPlayerGameMode gameMode) {
@@ -66,7 +63,7 @@ public final class BaritonePlayerContext implements IPlayerContext {
         this.playerController = new BaritonePlayerController(mc, gameMode);
     }
 
-    /** 假人重生/切换 player 后更新绑定引用（primary 实例不要调用，动态读 mc.player）。 */
+    /** 假人重生/切换 player 后更新绑定引用。 */
     public void setPlayer(LocalPlayer player) {
         this.boundPlayer = player;
     }

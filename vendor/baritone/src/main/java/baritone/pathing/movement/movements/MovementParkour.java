@@ -17,6 +17,7 @@
 
 package com.mockplayer.baritone.pathing.movement.movements;
 
+import net.minecraft.network.chat.Component;
 import com.mockplayer.baritone.Baritone;
 import com.mockplayer.baritone.api.IBaritone;
 import com.mockplayer.baritone.api.pathing.movement.MovementStatus;
@@ -256,7 +257,7 @@ public class MovementParkour extends Movement {
         }
         if (ctx.playerFeet().y < src.y) {
             // we have fallen
-            logDebug("sorry");
+            logDebug(Component.translatableEscape("baritone.log.misc.sorry"));
             return state.setStatus(MovementStatus.UNREACHABLE);
         }
         if (dist >= 4 || ascend) {

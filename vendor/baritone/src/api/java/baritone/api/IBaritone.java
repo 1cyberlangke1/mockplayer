@@ -133,12 +133,26 @@ public interface IBaritone {
     }
 
     /**
+     * @return The {@link IEventBus} instance
+     * @see IEventBus
+     */
+    IEventBus getGameEventHandler();
+
+    /**
+     * @return The {@link ISelectionManager} instance
+     * @see ISelectionManager
+     */
+    ISelectionManager getSelectionManager();
+
+    /**
+     * Open click
+     */
+    /**
      * 更新绑定的假人 player（假人重生/切换 player 后调用；primary 实例无操作）。
      *
      * @param player 新的假人 LocalPlayer
      */
     default void updateBoundPlayer(LocalPlayer player) {
-        // primary 实例动态读 mc.player，无需更新
     }
 
     /**
@@ -154,17 +168,4 @@ public interface IBaritone {
      */
     default void updateServerKey(String serverKey) {
     }
-
-    /**
-     * @return The {@link IEventBus} instance
-     * @see IEventBus
-     */
-    IEventBus getGameEventHandler();
-
-    /**
-     * @return The {@link ISelectionManager} instance
-     * @see ISelectionManager
-     */
-    ISelectionManager getSelectionManager();
-
 }

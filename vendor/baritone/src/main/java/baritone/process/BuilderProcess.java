@@ -17,6 +17,7 @@
 
 package com.mockplayer.baritone.process;
 
+import net.minecraft.network.chat.Component;
 import com.mockplayer.baritone.Baritone;
 import com.mockplayer.baritone.api.Settings;
 import com.mockplayer.baritone.api.pathing.goals.Goal;
@@ -47,7 +48,6 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Vec3i;
-import net.minecraft.util.Tuple;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
@@ -138,7 +138,7 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
         this.stopAtHeight = schematic.heightY();
         if (settings().buildOnlySelection.value && buildingSelectionSchematic) {  // currently redundant but safer maybe
             if (baritone.getSelectionManager().getSelections().length == 0) {
-                logDirect("Poor little kitten forgot to set a selection while BuildOnlySelection is true");
+                logDirect(Component.translatableEscape("baritone.log.build.no_selection"));
                 this.stopAtHeight = 0;
             } else if (settings().buildInLayers.value) {
                 OptionalInt minim = Stream.of(baritone.getSelectionManager().getSelections()).mapToInt(sel -> sel.min().y).min();
@@ -147,9 +147,9 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
                     int startAtHeight = settings().layerOrder.value ? y + schematic.heightY() - maxim.getAsInt() : minim.getAsInt() - y;
                     this.stopAtHeight = (settings().layerOrder.value ? y + schematic.heightY() - minim.getAsInt() : maxim.getAsInt() - y) + 1;
                     this.layer = Math.max(this.layer, startAtHeight / settings().layerHeight.value);  // startAtLayer or startAtHeight, whichever is highest
-                    logDebug(String.format("Schematic starts at y=%s with height %s", y, schematic.heightY()));
-                    logDebug(String.format("Selection starts at y=%s and ends at y=%s", minim.getAsInt(), maxim.getAsInt()));
-                    logDebug(String.format("Considering relevant height %s - %s", startAtHeight, this.stopAtHeight));
+                    logDebug(Component.translatableEscape("baritone.log.build.schematic_y", y, schematic.heightY()));
+                    logDebug(Component.translatableEscape("baritone.log.build.selection_y", minim.getAsInt(), maxim.getAsInt()));
+                    logDebug(Component.translatableEscape("baritone.log.build.relevant_height", startAtHeight, this.stopAtHeight));
                 }
             }
         }
@@ -204,17 +204,17 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
     @Override
     public void buildOpenSchematic() {
         if (SchematicaHelper.isSchematicaPresent()) {
-            Optional<Tuple<IStaticSchematic, BlockPos>> schematic = SchematicaHelper.getOpenSchematic();
+            Optional<Pair<IStaticSchematic, BlockPos>> schematic = SchematicaHelper.getOpenSchematic();
             if (schematic.isPresent()) {
-                IStaticSchematic raw = schematic.get().getA();
-                BlockPos origin = schematic.get().getB();
+                IStaticSchematic raw = schematic.get().first();
+                BlockPos origin = schematic.get().second();
                 ISchematic schem = applyMapArtAndSelection(origin, raw);
                 this.build(raw.toString(), schem, origin);
             } else {
-                logDirect("No schematic currently open");
+                logDirect(Component.translatableEscape("baritone.log.build.no_schematic"));
             }
         } else {
-            logDirect("Schematica is not present");
+            logDirect(Component.translatableEscape("baritone.log.build.no_schematica"));
         }
     }
 
@@ -223,15 +223,15 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
         if (LitematicaHelper.isLitematicaPresent()) {
             //if java.lang.NoSuchMethodError is thrown see comment in SchematicPlacementManager
             if (LitematicaHelper.hasLoadedSchematic(i)) {
-                Tuple<IStaticSchematic, Vec3i> schematic = LitematicaHelper.getSchematic(i);
-                Vec3i correctedOrigin = schematic.getB();
-                ISchematic schematic2 = applyMapArtAndSelection(correctedOrigin, schematic.getA());
-                build(schematic.getA().toString(), schematic2, correctedOrigin);
+                Pair<IStaticSchematic, Vec3i> schematic = LitematicaHelper.getSchematic(i);
+                Vec3i correctedOrigin = schematic.second();
+                ISchematic schematic2 = applyMapArtAndSelection(correctedOrigin, schematic.first());
+                build(schematic.first().toString(), schematic2, correctedOrigin);
             } else {
-                logDirect(String.format("List of placements has no entry %s", i + 1));
+                logDirect(Component.translatableEscape("baritone.log.build.no_placement", i + 1));
             }
         } else {
-            logDirect("Litematica is not present");
+            logDirect(Component.translatableEscape("baritone.log.build.no_litematica"));
         }
     }
 
@@ -267,7 +267,7 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
         return state;
     }
 
-    private Optional<Tuple<BetterBlockPos, Rotation>> toBreakNearPlayer(BuilderCalculationContext bcc) {
+    private Optional<Pair<BetterBlockPos, Rotation>> toBreakNearPlayer(BuilderCalculationContext bcc) {
         BetterBlockPos center = ctx.playerFeet();
         BetterBlockPos pathStart = baritone.getPathingBehavior().pathStart();
         for (int dx = -5; dx <= 5; dx++) {
@@ -288,7 +288,7 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
                         BetterBlockPos pos = new BetterBlockPos(x, y, z);
                         Optional<Rotation> rot = RotationUtils.reachable(ctx, pos, ctx.playerController().getBlockReachDistance());
                         if (rot.isPresent()) {
-                            return Optional.of(new Tuple<>(pos, rot.get()));
+                            return Optional.of(new Pair<>(pos, rot.get()));
                         }
                     }
                 }
@@ -504,7 +504,7 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
         BuilderCalculationContext bcc = new BuilderCalculationContext();
         if (!recalc(bcc)) {
             if (settings().buildInLayers.value && layer * settings().layerHeight.value < stopAtHeight) {
-                logDirect("Starting layer " + layer);
+                logDirect(Component.translatableEscape("baritone.log.build.start_layer", layer));
                 layer++;
                 return onTick(calcFailed, isSafeToCancel, recursions + 1);
             }
@@ -512,9 +512,9 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
             int max = settings().buildRepeatCount.value;
             numRepeats++;
             if (repeat.equals(new Vec3i(0, 0, 0)) || (max != -1 && numRepeats >= max)) {
-                logDirect("Done building");
+                logDirect(Component.translatableEscape("baritone.log.build.done"));
                 if (settings().notificationOnBuildFinished.value) {
-                    logNotification("Done building", false);
+                    logNotification(Component.translatableEscape("baritone.log.build.done"), false);
                 }
                 onLostControl();
                 return null;
@@ -525,19 +525,19 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
             if (!settings().buildRepeatSneaky.value) {
                 schematic.reset();
             }
-            logDirect("Repeating build in vector " + repeat + ", new origin is " + origin);
+            logDirect(Component.translatableEscape("baritone.log.build.repeat", repeat, origin));
             return onTick(calcFailed, isSafeToCancel, recursions + 1);
         }
         if (settings().distanceTrim.value) {
             trim();
         }
 
-        Optional<Tuple<BetterBlockPos, Rotation>> toBreak = toBreakNearPlayer(bcc);
+        Optional<Pair<BetterBlockPos, Rotation>> toBreak = toBreakNearPlayer(bcc);
         if (toBreak.isPresent() && isSafeToCancel && ctx.player().onGround()) {
             // we'd like to pause to break this block
             // only change look direction if it's safe (don't want to fuck up an in progress parkour for example
-            Rotation rot = toBreak.get().getB();
-            BetterBlockPos pos = toBreak.get().getA();
+            Rotation rot = toBreak.get().second();
+            BetterBlockPos pos = toBreak.get().first();
             baritone.getLookBehavior().updateTarget(rot, true);
             MovementHelper.switchToBestToolFor(ctx, bcc.get(pos));
             if (ctx.player().isCrouching()) {
@@ -597,11 +597,11 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
             goal = assemble(bcc, approxPlaceable, true); // we're far away, so assume that we have our whole inventory to recalculate placeable properly
             if (goal == null) {
                 if (settings().skipFailedLayers.value && settings().buildInLayers.value && layer * settings().layerHeight.value < realSchematic.heightY()) {
-                    logDirect("Skipping layer that I cannot construct! Layer #" + layer);
+                    logDirect(Component.translatableEscape("baritone.log.build.skip_layer", layer));
                     layer++;
                     return onTick(calcFailed, isSafeToCancel, recursions + 1);
                 }
-                logDirect("Unable to do it. Pausing. resume to resume, cancel to cancel");
+                logDirect(Component.translatableEscape("baritone.log.build.pause_manual"));
                 paused = true;
                 return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
             }
@@ -750,13 +750,13 @@ public final class BuilderProcess extends BaritoneProcessHelper implements IBuil
         }
         if (toBreak.isEmpty()) {
             if (logMissing && !missing.isEmpty()) {
-                logDirect("Missing materials for at least:");
+                logDirect(Component.translatableEscape("baritone.log.build.missing_materials"));
                 logDirect(missing.entrySet().stream()
                         .map(e -> String.format("%sx %s", e.getValue(), e.getKey()))
                         .collect(Collectors.joining("\n")));
             }
             if (logMissing && !flowingLiquids.isEmpty()) {
-                logDirect("Unreplaceable liquids at at least:");
+                logDirect(Component.translatableEscape("baritone.log.build.unreplaceable_liquids"));
                 logDirect(flowingLiquids.stream()
                         .map(p -> String.format("%s %s %s", p.x, p.y, p.z))
                         .collect(Collectors.joining("\n")));

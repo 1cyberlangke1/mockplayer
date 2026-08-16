@@ -17,6 +17,7 @@
 
 package com.mockplayer.baritone.pathing.calc;
 
+import net.minecraft.network.chat.Component;
 import com.mockplayer.baritone.api.pathing.calc.IPath;
 import com.mockplayer.baritone.api.pathing.goals.Goal;
 import com.mockplayer.baritone.api.pathing.movement.IMovement;
@@ -138,7 +139,7 @@ class Path extends PathBase {
             }
         }
         // this is no longer called from bestPathSoFar, now it's in postprocessing
-        Helper.HELPER.logDebug("Movement became impossible during calculation " + src + " " + dest + " " + dest.subtract(src));
+        Helper.HELPER.logDebug(Component.translatableEscape("baritone.log.calc.movement_impossible", src, dest, dest.subtract(src)));
         return null;
     }
 

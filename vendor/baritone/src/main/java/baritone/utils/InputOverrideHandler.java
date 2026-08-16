@@ -18,6 +18,7 @@
 package com.mockplayer.baritone.utils;
 
 import com.mockplayer.baritone.Baritone;
+import com.mockplayer.baritone.api.BaritoneAPI;
 import com.mockplayer.baritone.api.event.events.TickEvent;
 import com.mockplayer.baritone.api.utils.IInputOverrideHandler;
 import com.mockplayer.baritone.api.utils.input.Input;
@@ -112,9 +113,9 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
     }
 
     /**
-     * 直接写假人 input 字段（mockplayer 激进改造：不替换 input 对象，与 BotActions
-     * 同一写入机制；谁活跃谁写，空闲时让位 BotActions）。时序：Tick IN 事件在
-     * 假人 LocalPlayer.tick 之前，本 tick 物理直接读本次写入。
+     * 直接写假人 input 字段（不替换 input 对象，与 BotActions 同一写入机制；
+     * 谁活跃谁写，空闲时让位 BotActions）。时序：Tick IN 事件在假人
+     * LocalPlayer.tick 之前，本 tick 物理直接读本次写入。
      */
     private void writeInput() {
         ClientInput input = ctx.player().input;
@@ -144,13 +145,13 @@ public final class InputOverrideHandler extends Behavior implements IInputOverri
             leftImpulse *= 0.3F;
             forwardImpulse *= 0.3F;
         }
-        ((com.mockplayer.baritone.utils.accessor.IClientInputAccessor) input)
-                .baritone$setMoveVector(new Vec2(leftImpulse, forwardImpulse));
+        com.mockplayer.baritone.utils.accessor.IClientInputAccessor accessor =
+                (com.mockplayer.baritone.utils.accessor.IClientInputAccessor) input;
+        accessor.baritone$setMoveVector(new Vec2(leftImpulse, forwardImpulse));
         boolean jumping = isInputForcedDown(Input.JUMP);
         boolean sprinting = isInputForcedDown(Input.SPRINT);
-        ((com.mockplayer.baritone.utils.accessor.IClientInputAccessor) input)
-                .baritone$setKeyPresses(new net.minecraft.world.entity.player.Input(
-                        up, down, left, right, jumping, sneaking, sprinting));
+        accessor.baritone$setKeyPresses(new net.minecraft.world.entity.player.Input(
+                up, down, left, right, jumping, sneaking, sprinting));
     }
 
     private boolean inControl() {

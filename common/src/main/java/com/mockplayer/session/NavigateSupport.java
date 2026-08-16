@@ -25,7 +25,8 @@ public final class NavigateSupport {
     public static final List<String> CONFIG_KEYS = List.of(
             "enabled", "allowSprint", "allowBreak", "allowPlace",
             "allowParkour", "allowDiagonal", "avoidance",
-            "preferSilkTouch", "mineScanDroppedItems", "pathTimeoutMs");
+            "preferSilkTouch", "mineScanDroppedItems", "pathTimeoutMs",
+            "logToChat", "logDebugToChat", "logNotificationToChat", "logToastToChat");
 
     private NavigateSupport() {
     }
@@ -48,8 +49,19 @@ public final class NavigateSupport {
             case "preferSilkTouch" -> cfg.isNavigatePreferSilkTouch();
             case "mineScanDroppedItems" -> cfg.isNavigateMineScanDroppedItems();
             case "pathTimeoutMs" -> cfg.getNavigatePathTimeoutMs();
+            case "logToChat" -> baritoneBool(session, s -> s.logToChat.value);
+            case "logDebugToChat" -> baritoneBool(session, s -> s.logDebugToChat.value);
+            case "logNotificationToChat" -> baritoneBool(session, s -> s.logNotificationToChat.value);
+            case "logToastToChat" -> baritoneBool(session, s -> s.logToastToChat.value);
             default -> null;
         };
+    }
+
+    /** baritone settings 布尔读取（per-instance；无实例回退 false）。 */
+    private static Object baritoneBool(FakeSession session,
+                                       java.util.function.Function<Settings, Boolean> getter) {
+        IBaritone b = session.getBaritone();
+        return b != null ? getter.apply(b.settings()) : Boolean.FALSE;
     }
 
     /** 解析 config set 的字符串值（布尔/整数；非法返回 null）。 */
@@ -72,6 +84,25 @@ public final class NavigateSupport {
         return null;
     }
 
+    /** 直接写 baritone settings 的 key（日志开关等；返回 true 表示已处理，不经过 per-bot override）。 */
+    public static boolean applyDirectSetting(FakeSession session, String key, Object value) {
+        IBaritone b = session != null ? session.getBaritone() : null;
+        if (b == null) {
+            return false;
+        }
+        Settings s = b.settings();
+        switch (key) {
+            case "logToChat" -> s.logToChat.value = Boolean.TRUE.equals(value);
+            case "logDebugToChat" -> s.logDebugToChat.value = Boolean.TRUE.equals(value);
+            case "logNotificationToChat" -> s.logNotificationToChat.value = Boolean.TRUE.equals(value);
+            case "logToastToChat" -> s.logToastToChat.value = Boolean.TRUE.equals(value);
+            default -> {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** 应用寻路配置到假人 baritone 实例（创建时 / 配置热重载 / config set 后调用）。 */
     public static void applyToSession(FakeSession session) {
         IBaritone baritone = session.getBaritone();
@@ -90,6 +121,10 @@ public final class NavigateSupport {
         settings.avoidance.value = Boolean.TRUE.equals(effectiveValue(session, "avoidance"));
         settings.preferSilkTouch.value = Boolean.TRUE.equals(effectiveValue(session, "preferSilkTouch"));
         settings.mineScanDroppedItems.value = Boolean.TRUE.equals(effectiveValue(session, "mineScanDroppedItems"));
+        settings.logToChat.value = Boolean.TRUE.equals(effectiveValue(session, "logToChat"));
+        settings.logDebugToChat.value = Boolean.TRUE.equals(effectiveValue(session, "logDebugToChat"));
+        settings.logNotificationToChat.value = Boolean.TRUE.equals(effectiveValue(session, "logNotificationToChat"));
+        settings.logToastToChat.value = Boolean.TRUE.equals(effectiveValue(session, "logToastToChat"));
         Object timeout = effectiveValue(session, "pathTimeoutMs");
         if (timeout instanceof Number n) {
             settings.primaryTimeoutMS.value = n.longValue();

@@ -17,6 +17,7 @@
 
 package com.mockplayer.baritone.pathing.calc;
 
+import net.minecraft.network.chat.Component;
 import com.mockplayer.baritone.Baritone;
 import com.mockplayer.baritone.api.pathing.calc.IPath;
 import com.mockplayer.baritone.api.pathing.goals.Goal;
@@ -67,7 +68,7 @@ public final class AStarPathFinder extends AbstractNodeCostSearch {
         long startTime = System.currentTimeMillis();
         boolean slowPath = calcContext.baritone.settings().slowPath.value;
         if (slowPath) {
-            logDebug("slowPath is on, path timeout will be " + calcContext.baritone.settings().slowPathTimeoutMS.value + "ms instead of " + primaryTimeout + "ms");
+            logDebug(Component.translatableEscape("baritone.log.calc.slow_path", calcContext.baritone.settings().slowPathTimeoutMS.value, primaryTimeout));
         }
         long primaryTimeoutTime = startTime + (slowPath ? calcContext.baritone.settings().slowPathTimeoutMS.value : primaryTimeout);
         long failureTimeoutTime = startTime + (slowPath ? calcContext.baritone.settings().slowPathTimeoutMS.value : failureTimeout);
@@ -96,7 +97,7 @@ public final class AStarPathFinder extends AbstractNodeCostSearch {
             mostRecentConsidered = currentNode;
             numNodes++;
             if (goal.isInGoal(currentNode.x, currentNode.y, currentNode.z)) {
-                logDebug("Took " + (System.currentTimeMillis() - startTime) + "ms, " + numMovementsConsidered + " movements considered");
+                logDebug(Component.translatableEscape("baritone.log.calc.took", (System.currentTimeMillis() - startTime), numMovementsConsidered));
                 return Optional.of(new Path(realStart, startNode, currentNode, numNodes, goal, calcContext));
             }
             for (Moves moves : allMoves) {
@@ -189,13 +190,9 @@ public final class AStarPathFinder extends AbstractNodeCostSearch {
         if (cancelRequested) {
             return Optional.empty();
         }
-        System.out.println(numMovementsConsidered + " movements considered");
-        System.out.println("Open set size: " + openSet.size());
-        System.out.println("PathNode map size: " + mapSize());
-        System.out.println((int) (numNodes * 1.0 / ((System.currentTimeMillis() - startTime) / 1000F)) + " nodes per second");
         Optional<IPath> result = bestSoFar(true, numNodes);
         if (result.isPresent()) {
-            logDebug("Took " + (System.currentTimeMillis() - startTime) + "ms, " + numMovementsConsidered + " movements considered");
+            logDebug(Component.translatableEscape("baritone.log.calc.took", (System.currentTimeMillis() - startTime), numMovementsConsidered));
         }
         return result;
     }

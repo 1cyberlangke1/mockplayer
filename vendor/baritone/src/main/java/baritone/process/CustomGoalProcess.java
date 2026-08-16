@@ -63,7 +63,8 @@ public final class CustomGoalProcess extends BaritoneProcessHelper implements IC
             try {
                 baritone.getElytraProcess().pathTo(goal);
             } catch (IllegalArgumentException e) {
-                logDirect("Failed to update elytra goal because: " + e.getMessage(), ChatFormatting.RED);
+                // ChatFormatting 是 logDirect 的样式参数，不是消息参数（neoforge dev 校验会拦非原语参数）
+                logDirect(Component.translatableEscape("baritone.log.misc.elytra_goal_failed", e.getMessage()), ChatFormatting.RED);
             }
         }
         if (this.state == State.NONE) {
@@ -117,7 +118,7 @@ public final class CustomGoalProcess extends BaritoneProcessHelper implements IC
                         }
                     }
                     if (settings().notificationOnPathComplete.value) {
-                        logNotification("Pathing complete", false);
+                        logNotification(Component.translatableEscape("baritone.log.misc.pathing_complete"), false);
                     }
                     return new PathingCommand(this.goal, PathingCommandType.CANCEL_AND_SET_GOAL);
                 }

@@ -415,6 +415,9 @@ public class FakeSession {
         // Tick IN（PathingBehavior 处理路径命令 + 重建 bsi）→ PlayerUpdate PRE
         // （在假人 LocalPlayer.tick 之前）→ …物理… → PlayerUpdate POST → Tick OUT
         com.mockplayer.baritone.api.IBaritone botBaritone = this.botBaritone;
+        // 当前驱动中的假人 baritone 实例（per-bot settings 与日志前缀
+        // [baritone-mockplayer-<bot名>] 用；异步线程无上下文回退全局默认）
+        com.mockplayer.baritone.api.utils.Helper.CURRENT_BOT.set(botBaritone);
         boolean feedBaritone = botBaritone != null && this.playListener != null && this.fakePlayer != null;
         if (feedBaritone) {
             int count = this.baritoneTickCount++;
@@ -488,6 +491,7 @@ public class FakeSession {
                             com.mockplayer.baritone.api.event.events.TickEvent.Type.IN,
                             this.baritoneTickCount - 1));
         }
+        com.mockplayer.baritone.api.utils.Helper.CURRENT_BOT.remove();
     }
 
     /**

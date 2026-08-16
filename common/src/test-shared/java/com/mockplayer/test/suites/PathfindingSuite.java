@@ -45,6 +45,87 @@ public class PathfindingSuite extends TestSuite {
         test("命令层 mode/mine/follow", this::commandLayerWiring);
         test("渲染默认 F3_ONLY 不渲染", this::renderDefaultOff);
         test("mine 拾取掉落物", this::minePicksUpDrops);
+        test("baritone 日志开关", this::baritoneLogSwitches);
+    }
+
+    /** 测试 10：baritone 日志四开关默认关 + config set 链路生效 + 调用不崩。 */
+    private void baritoneLogSwitches(TestContext ctx) {
+        ctx.run(() -> SuitesSupport.createBot(ctx, BOT_A));
+        ctx.await("lifecycle PLAYING", () -> ctx.bot() != null
+                && ctx.bot().getLifecycle() == BotLifecycle.PLAYING, 300);
+        ctx.run(() -> {
+            BotImpl impl = (BotImpl) ctx.bot();
+            var settings = impl.session().getBaritone().settings();
+            // 四个开关默认全关
+            ctx.checkNow("log switches default off",
+                    !settings.logToChat.value && !settings.logDebugToChat.value
+                            && !settings.logNotificationToChat.value && !settings.logToastToChat.value);
+            // /control config set 链路生效（baritone 侧设置）
+            ctx.platform().executeClientCommand("control " + BOT_A + " config set logToChat true");
+            ctx.checkNow("logToChat set via command", settings.logToChat.value);
+            // 开关开：logDirect 走聊天分支 → 主玩家聊天出现 [baritone-mockplayer-<bot名>] 前缀 + 翻译文本
+            // （翻译 key 不裸露 = 已走语言文件；占位符带参数 = 不显示原文模板）
+            com.mockplayer.baritone.api.utils.Helper.CURRENT_BOT.set(impl.session().getBaritone());
+            try {
+                com.mockplayer.baritone.api.utils.Helper.HELPER.logDirect(
+                        net.minecraft.network.chat.Component.translatableEscape(
+                                "baritone.log.mine.no_path_cancel", "minecraft:oak_log"));
+            } finally {
+                com.mockplayer.baritone.api.utils.Helper.CURRENT_BOT.remove();
+            }
+            String last = lastChatText();
+            ctx.checkNow("logToChat shows prefixed translated message", last != null
+                    && last.contains("[baritone-mockplayer-" + BOT_A + "]")
+                    && !last.contains("baritone.log.mine.no_path_cancel"));
+            // 开关关：debug 分支，聊天不新增消息
+            ctx.platform().executeClientCommand("control " + BOT_A + " config reset logToChat");
+            ctx.checkNow("logToChat reset via command", !settings.logToChat.value);
+            int countBefore = chatMessageCount();
+            com.mockplayer.baritone.api.utils.Helper.CURRENT_BOT.set(impl.session().getBaritone());
+            try {
+                com.mockplayer.baritone.api.utils.Helper.HELPER.logDirect(
+                        net.minecraft.network.chat.Component.translatableEscape(
+                                "baritone.log.mine.no_path_cancel", "minecraft:oak_log"));
+            } finally {
+                com.mockplayer.baritone.api.utils.Helper.CURRENT_BOT.remove();
+            }
+            ctx.checkNow("logToChat off no chat message", chatMessageCount() == countBefore);
+        });
+        ctx.run(() -> MockplayerApi.bots().removeBot(BOT_A, "test"));
+    }
+
+    /** 主玩家聊天消息总数（反射读 ChatComponent.allMessages）。 */
+    private static int chatMessageCount() {
+        try {
+            net.minecraft.client.gui.components.ChatComponent chat =
+                    net.minecraft.client.Minecraft.getInstance().gui.getChat();
+            java.lang.reflect.Field f = net.minecraft.client.gui.components.ChatComponent.class
+                    .getDeclaredField("allMessages");
+            f.setAccessible(true);
+            return ((java.util.List<?>) f.get(chat)).size();
+        } catch (Throwable t) {
+            return -1;
+        }
+    }
+
+    /** 主玩家聊天最近一条消息文本（反射读 ChatComponent.allMessages 最新一条的 content）。 */
+    private static String lastChatText() {
+        try {
+            net.minecraft.client.gui.components.ChatComponent chat =
+                    net.minecraft.client.Minecraft.getInstance().gui.getChat();
+            java.lang.reflect.Field f = net.minecraft.client.gui.components.ChatComponent.class
+                    .getDeclaredField("allMessages");
+            f.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            java.util.List<net.minecraft.client.multiplayer.chat.GuiMessage> msgs =
+                    (java.util.List<net.minecraft.client.multiplayer.chat.GuiMessage>) f.get(chat);
+            if (msgs == null || msgs.isEmpty()) {
+                return null;
+            }
+            return msgs.get(0).content().getString();
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
     /** 测试 9：mine 按类型挖矿能拾取掉落物——服务端生成 oak_log 掉落物在假人面前，

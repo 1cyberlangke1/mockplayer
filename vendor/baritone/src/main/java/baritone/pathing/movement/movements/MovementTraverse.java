@@ -17,6 +17,7 @@
 
 package com.mockplayer.baritone.pathing.movement.movements;
 
+import net.minecraft.network.chat.Component;
 import com.mockplayer.baritone.Baritone;
 import com.mockplayer.baritone.api.IBaritone;
 import com.mockplayer.baritone.api.pathing.movement.MovementStatus;
@@ -248,7 +249,7 @@ public class MovementTraverse extends Movement {
         boolean isTheBridgeBlockThere = MovementHelper.canWalkOn(ctx, positionToPlace) || ladder || MovementHelper.canUseFrostWalker(ctx, positionToPlace);
         BlockPos feet = ctx.playerFeet();
         if (feet.getY() != dest.getY() && !ladder) {
-            logDebug("Wrong Y coordinate");
+            logDebug(Component.translatableEscape("baritone.log.misc.wrong_y"));
             if (feet.getY() < dest.getY()) {
                 System.out.println("In movement traverse");
                 return state.setInput(Input.JUMP, true);

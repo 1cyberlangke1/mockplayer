@@ -590,8 +590,10 @@ public class ControlCommands {
                     return fail("commands.mockplayer.control.config.invalid_value", key, value);
                 }
                 if (session != null) {
-                    session.setNavigateOverride(key, parsed);
-                    com.mockplayer.session.NavigateSupport.applyToSession(session);
+                    if (!com.mockplayer.session.NavigateSupport.applyDirectSetting(session, key, parsed)) {
+                        session.setNavigateOverride(key, parsed);
+                        com.mockplayer.session.NavigateSupport.applyToSession(session);
+                    }
                 }
                 return info("commands.mockplayer.control.config.set", playerName(name), key, parsed);
             }
@@ -600,8 +602,10 @@ public class ControlCommands {
                     return fail("commands.mockplayer.control.config.usage", mode);
                 }
                 if (session != null) {
-                    session.setNavigateOverride(key, null);
-                    com.mockplayer.session.NavigateSupport.applyToSession(session);
+                    if (!com.mockplayer.session.NavigateSupport.applyDirectSetting(session, key, Boolean.FALSE)) {
+                        session.setNavigateOverride(key, null);
+                        com.mockplayer.session.NavigateSupport.applyToSession(session);
+                    }
                 }
                 return info("commands.mockplayer.control.config.reset", playerName(name), key);
             }

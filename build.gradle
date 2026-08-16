@@ -56,3 +56,79 @@ gradle.projectsEvaluated {
         dependsOn ':fabric:jar', ':neoforge:jar'
     }
 }
+
+// 完整性：baritone 日志翻译 key 必须存在于 lang 文件（新增消息未补翻译 → 构建失败，
+// 保证运行时不存在「匹配不到翻译」的情况）
+tasks.register('verifyBaritoneLang') {
+    doLast {
+        def keys = new HashSet()
+        def keyArgCounts = new HashMap<String, Set<Integer>>()
+        fileTree('vendor/baritone/src') { include '**/*.java' }.each { f ->
+            def matcher = f.text =~ /(?:Component|net\.minecraft\.network\.chat\.Component)\.translatable(?:Escape)?\("([A-Za-z0-9_.]+)"/
+            while (matcher.find()) {
+                String k = matcher.group(1)
+                keys.add(k)
+                int args = countTranslatableArgs(f.text, matcher.start())
+                keyArgCounts.computeIfAbsent(k, { new HashSet<Integer>() }).add(args)
+            }
+        }
+        ['en_us', 'zh_cn'].each { lang ->
+            def map = new groovy.json.JsonSlurper().parse(
+                    file("vendor/baritone/src/main/resources/assets/baritone/lang/${lang}.json"))
+            keys.each { k ->
+                if (!map.containsKey(k)) {
+                    throw new GradleException("baritone lang ${lang} 缺少翻译 key: ${k}")
+                }
+                int placeholders = (((String) map[k]) =~ /%\d*\$?s/).findAll().size()
+                Set<Integer> counts = keyArgCounts[k]
+                if (!counts.contains(placeholders)) {
+                    throw new GradleException(
+                            "baritone lang ${lang} key ${k} 占位符数量(${placeholders})与调用点参数数量(${counts})不匹配")
+                }
+            }
+        }
+        println "baritone 日志翻译完整性 OK: ${keys.size()} keys"
+    }
+}
+
+// 统计 translatableEscape("key", ...) 调用点的参数个数（深度感知逗号分隔，忽略字符串内逗号）。
+def countTranslatableArgs(String text, int keyStart) {
+    int i = keyStart
+    while (i < text.length() && text.charAt(i) != '(') {
+        i++
+    }
+    int depth = 0
+    int commas = 0
+    boolean inStr = false
+    char quote = 0 as char
+    for (; i < text.length(); i++) {
+        char c = text.charAt(i)
+        if (inStr) {
+            if (c == '\\') {
+                i++
+            } else if (c == quote) {
+                inStr = false
+            }
+            continue
+        }
+        if (c == '"' || c == '\'') {
+            inStr = true
+            quote = c
+            continue
+        }
+        if (c == '(') {
+            depth++
+        } else if (c == ')') {
+            depth--
+            if (depth == 0) {
+                break
+            }
+        } else if (c == ',' && depth == 1) {
+            commas++
+        }
+    }
+    return commas
+}
+tasks.named('build') {
+    dependsOn 'verifyBaritoneLang'
+}

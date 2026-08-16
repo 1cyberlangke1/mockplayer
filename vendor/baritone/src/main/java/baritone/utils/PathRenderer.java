@@ -73,7 +73,6 @@ public final class PathRenderer implements IRenderer {
         if (ctx.world() == null) {
             return;
         }
-
         final float partialTicks = event.getPartialTicks();
         final Goal goal = behavior.getGoal();
 

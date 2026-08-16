@@ -33,7 +33,6 @@ import net.minecraft.world.level.block.state.properties.BedPart;
 
 import java.util.Set;
 
-
 public class WaypointBehavior extends Behavior {
 
 

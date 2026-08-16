@@ -21,9 +21,10 @@ import com.mockplayer.baritone.Baritone;
 import com.mockplayer.baritone.api.BaritoneAPI;
 import com.mockplayer.baritone.api.cache.IWorldProvider;
 import com.mockplayer.baritone.api.utils.IPlayerContext;
+import com.mockplayer.baritone.api.utils.Pair;
+import com.mockplayer.baritone.api.utils.Pair;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.resources.Identifier;
-import net.minecraft.util.Tuple;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.LevelResource;
 import org.apache.commons.lang3.SystemUtils;
@@ -72,8 +73,8 @@ public class WorldProvider implements IWorldProvider {
      */
     public final void initWorld(Level world) {
         this.getSaveDirectories(world).ifPresent(dirs -> {
-            final Path worldDir = dirs.getA();
-            final Path readmeDir = dirs.getB();
+            final Path worldDir = dirs.first();
+            final Path readmeDir = dirs.second();
 
             try {
                 // lol wtf is this baritone folder in my minecraft save?
@@ -106,8 +107,7 @@ public class WorldProvider implements IWorldProvider {
             return;
         }
         world.onClose();
-        // 无其他实例引用同一 WorldData 时从静态 map 移除（多假人同服务器同维度
-        // 共享时保留；假人销毁后无引用则释放，防缓存驻留）
+        // 无其他实例引用同一 WorldData 时从静态 map 移除
         synchronized (worldCache) {
             boolean referenced = BaritoneAPI.getProvider().getAllBaritones().stream()
                     .anyMatch(b -> b.getWorldProvider() instanceof WorldProvider wp
@@ -129,7 +129,7 @@ public class WorldProvider implements IWorldProvider {
      * @return An {@link Optional} containing the world's baritone dir and readme dir, or {@link Optional#empty()} if
      *         the world isn't valid for caching.
      */
-    private Optional<Tuple<Path, Path>> getSaveDirectories(Level world) {
+    private Optional<Pair<Path, Path>> getSaveDirectories(Level world) {
         Path worldDir;
         Path readmeDir;
 
@@ -142,7 +142,7 @@ public class WorldProvider implements IWorldProvider {
             }
             worldDir = baritone.getDirectory().resolve(serverKey);
             readmeDir = baritone.getDirectory();
-            return Optional.of(new Tuple<>(worldDir, readmeDir));
+            return Optional.of(new Pair<>(worldDir, readmeDir));
         }
 
         // If there is an integrated server running (Aka Singleplayer) then do magic to find the world save file
@@ -177,7 +177,7 @@ public class WorldProvider implements IWorldProvider {
             readmeDir = baritone.getDirectory();
         }
 
-        return Optional.of(new Tuple<>(worldDir, readmeDir));
+        return Optional.of(new Pair<>(worldDir, readmeDir));
     }
 
     /**

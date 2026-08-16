@@ -17,6 +17,7 @@
 
 package com.mockplayer.baritone.pathing.path;
 
+import net.minecraft.network.chat.Component;
 import com.mockplayer.baritone.Baritone;
 import com.mockplayer.baritone.api.pathing.calc.IPath;
 import com.mockplayer.baritone.api.pathing.movement.ActionCosts;
@@ -34,7 +35,6 @@ import com.mockplayer.baritone.pathing.movement.movements.*;
 import com.mockplayer.baritone.utils.BlockStateInterface;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
-import net.minecraft.util.Tuple;
 import net.minecraft.world.phys.Vec3;
 import java.util.*;
 
@@ -115,7 +115,7 @@ public class PathExecutor implements IPathExecutor, Helper {
                 // also don't check pathPosition+2 because reasons
                 if (((Movement) path.movements().get(i)).getValidPositions().contains(whereAmI)) {
                     if (i - pathPosition > 2) {
-                        logDebug("Skipping forward " + (i - pathPosition) + " steps, to " + i);
+                        logDebug(Component.translatableEscape("baritone.log.path.skip_forward", (i - pathPosition), i));
                     }
                     //System.out.println("Double skip sundae");
                     pathPosition = i - 1;
@@ -125,11 +125,11 @@ public class PathExecutor implements IPathExecutor, Helper {
                 }
             }
         }
-        Tuple<Double, BlockPos> status = closestPathPos(path);
+        Pair<Double, BlockPos> status = closestPathPos(path);
         if (possiblyOffPath(status, MAX_DIST_FROM_PATH)) {
             ticksAway++;
             if (ticksAway > MAX_TICKS_AWAY) {
-                logDebug("Too far away from path for too long, cancelling path");
+                logDebug(Component.translatableEscape("baritone.log.path.too_far_cancel"));
                 cancel();
                 return false;
             }
@@ -137,7 +137,7 @@ public class PathExecutor implements IPathExecutor, Helper {
             ticksAway = 0;
         }
         if (possiblyOffPath(status, MAX_MAX_DIST_FROM_PATH)) { // ok, stop right away, we're way too far.
-            logDebug("too far from path");
+            logDebug(Component.translatableEscape("baritone.log.path.too_far"));
             cancel();
             return false;
         }
@@ -179,12 +179,11 @@ public class PathExecutor implements IPathExecutor, Helper {
         }
         /*long end = System.nanoTime() / 1000000L;
         if (end - start > 0) {
-            System.out.println("Recalculating break and place took " + (end - start) + "ms");
         }*/
         if (pathPosition < path.movements().size() - 1) {
             IMovement next = path.movements().get(pathPosition + 1);
             if (!behavior.baritone.bsi.worldContainsLoadedChunk(next.getDest().x, next.getDest().z)) {
-                logDebug("Pausing since destination is at edge of loaded chunks");
+                logDebug(Component.translatableEscape("baritone.log.path.pause_chunk_edge"));
                 clearKeys();
                 return true;
             }
@@ -196,7 +195,7 @@ public class PathExecutor implements IPathExecutor, Helper {
             currentMovementOriginalCostEstimate = movement.getCost();
             for (int i = 1; i < behavior.baritone.settings().costVerificationLookahead.value && pathPosition + i < path.length() - 1; i++) {
                 if (((Movement) path.movements().get(pathPosition + i)).calculateCost(behavior.secretInternalGetCalculationContext()) >= ActionCosts.COST_INF && canCancel) {
-                    logDebug("Something has changed in the world and a future movement has become impossible. Cancelling.");
+                    logDebug(Component.translatableEscape("baritone.log.path.world_changed_future"));
                     cancel();
                     return true;
                 }
@@ -204,25 +203,25 @@ public class PathExecutor implements IPathExecutor, Helper {
         }
         double currentCost = movement.recalculateCost(behavior.secretInternalGetCalculationContext());
         if (currentCost >= ActionCosts.COST_INF && canCancel) {
-            logDebug("Something has changed in the world and this movement has become impossible. Cancelling.");
+            logDebug(Component.translatableEscape("baritone.log.path.world_changed_current"));
             cancel();
             return true;
         }
         if (!movement.calculatedWhileLoaded() && currentCost - currentMovementOriginalCostEstimate > behavior.baritone.settings().maxCostIncrease.value && canCancel) {
             // don't do this if the movement was calculated while loaded
             // that means that this isn't a cache error, it's just part of the path interfering with a later part
-            logDebug("Original cost " + currentMovementOriginalCostEstimate + " current cost " + currentCost + ". Cancelling.");
+            logDebug(Component.translatableEscape("baritone.log.path.cost_changed", currentMovementOriginalCostEstimate, currentCost));
             cancel();
             return true;
         }
         if (shouldPause()) {
-            logDebug("Pausing since current best path is a backtrack");
+            logDebug(Component.translatableEscape("baritone.log.path.pause_backtrack"));
             clearKeys();
             return true;
         }
         MovementStatus movementStatus = movement.update();
         if (movementStatus == UNREACHABLE || movementStatus == FAILED) {
-            logDebug("Movement returns status " + movementStatus);
+            logDebug(Component.translatableEscape("baritone.log.path.movement_status", movementStatus));
             cancel();
             return true;
         }
@@ -243,7 +242,7 @@ public class PathExecutor implements IPathExecutor, Helper {
                 // as you break the blocks required, the remaining cost goes down, to the point where
                 // ticksOnCurrent is greater than recalculateCost + 100
                 // this is why we cache cost at the beginning, and don't recalculate for this comparison every tick
-                logDebug("This movement has taken too long (" + ticksOnCurrent + " ticks, expected " + currentMovementOriginalCostEstimate + "). Cancelling.");
+                logDebug(Component.translatableEscape("baritone.log.path.movement_timeout", ticksOnCurrent, currentMovementOriginalCostEstimate));
                 cancel();
                 return true;
             }
@@ -251,7 +250,7 @@ public class PathExecutor implements IPathExecutor, Helper {
         return canCancel; // movement is in progress, but if it reports cancellable, PathingBehavior is good to cut onto the next path
     }
 
-    private Tuple<Double, BlockPos> closestPathPos(IPath path) {
+    private Pair<Double, BlockPos> closestPathPos(IPath path) {
         double best = -1;
         BlockPos bestPos = null;
         for (IMovement movement : path.movements()) {
@@ -263,7 +262,7 @@ public class PathExecutor implements IPathExecutor, Helper {
                 }
             }
         }
-        return new Tuple<>(best, bestPos);
+        return new Pair<>(best, bestPos);
     }
 
     private boolean shouldPause() {
@@ -299,8 +298,8 @@ public class PathExecutor implements IPathExecutor, Helper {
         return positions.contains(ctx.playerFeet());
     }
 
-    private boolean possiblyOffPath(Tuple<Double, BlockPos> status, double leniency) {
-        double distanceFromPath = status.getA();
+    private boolean possiblyOffPath(Pair<Double, BlockPos> status, double leniency) {
+        double distanceFromPath = status.first();
         if (distanceFromPath > leniency) {
             // when we're midair in the middle of a fall, we're very far from both the beginning and the end, but we aren't actually off path
             if (path.movements().get(pathPosition) instanceof MovementFall) {
@@ -357,14 +356,14 @@ public class PathExecutor implements IPathExecutor, Helper {
             IMovement next = path.movements().get(pathPosition + 1);
             if (next instanceof MovementAscend && sprintableAscend(ctx, (MovementTraverse) current, (MovementAscend) next, path.movements().get(pathPosition + 2))) {
                 if (skipNow(ctx, current)) {
-                    logDebug("Skipping traverse to straight ascend");
+                    logDebug(Component.translatableEscape("baritone.log.path.skip_traverse_ascend"));
                     pathPosition++;
                     onChangeInPathPosition();
                     onTick();
                     behavior.baritone.getInputOverrideHandler().setInputForceState(Input.JUMP, true);
                     return true;
                 } else {
-                    logDebug("Too far to the side to safely sprint ascend");
+                    logDebug(Component.translatableEscape("baritone.log.path.too_far_sprint_ascend"));
                 }
             }
         }
@@ -398,7 +397,7 @@ public class PathExecutor implements IPathExecutor, Helper {
                 }
             }
             if (((MovementDescend) current).safeMode() && !((MovementDescend) current).skipToAscend()) {
-                logDebug("Sprinting would be unsafe");
+                logDebug(Component.translatableEscape("baritone.log.path.sprint_unsafe"));
                 return false;
             }
 
@@ -410,7 +409,7 @@ public class PathExecutor implements IPathExecutor, Helper {
                     onChangeInPathPosition();
                     onTick();
                     // okay to skip clearKeys and / or onChangeInPathPosition here since this isn't possible to repeat, since it's asymmetric
-                    logDebug("Skipping descend to straight ascend");
+                    logDebug(Component.translatableEscape("baritone.log.path.skip_descend_ascend"));
                     return true;
                 }
                 if (canSprintFromDescendInto(ctx, current, next)) {
@@ -450,9 +449,9 @@ public class PathExecutor implements IPathExecutor, Helper {
             }
         }
         if (current instanceof MovementFall) {
-            Tuple<Vec3, BlockPos> data = overrideFall((MovementFall) current);
+            Pair<Vec3, BlockPos> data = overrideFall((MovementFall) current);
             if (data != null) {
-                BetterBlockPos fallDest = new BetterBlockPos(data.getB());
+                BetterBlockPos fallDest = new BetterBlockPos(data.second());
                 if (!path.positions().contains(fallDest)) {
                     throw new IllegalStateException(String.format(
                             "Fall override at %s %s %s returned illegal destination %s %s %s",
@@ -465,7 +464,7 @@ public class PathExecutor implements IPathExecutor, Helper {
                     return true;
                 }
                 clearKeys();
-                behavior.baritone.getLookBehavior().updateTarget(RotationUtils.calcRotationFromVec3d(ctx.playerHead(), data.getA(), ctx.playerRotations()), false);
+                behavior.baritone.getLookBehavior().updateTarget(RotationUtils.calcRotationFromVec3d(ctx.playerHead(), data.first(), ctx.playerRotations()), false);
                 behavior.baritone.getInputOverrideHandler().setInputForceState(Input.MOVE_FORWARD, true);
                 return true;
             }
@@ -473,7 +472,7 @@ public class PathExecutor implements IPathExecutor, Helper {
         return false;
     }
 
-    private Tuple<Vec3, BlockPos> overrideFall(MovementFall movement) {
+    private Pair<Vec3, BlockPos> overrideFall(MovementFall movement) {
         Vec3i dir = movement.getDirection();
         if (dir.getY() < -3) {
             return null;
@@ -507,7 +506,7 @@ public class PathExecutor implements IPathExecutor, Helper {
             return null; // no valid extension exists
         }
         double len = i - pathPosition - 0.4;
-        return new Tuple<>(
+        return new Pair<>(
                 new Vec3(flatDir.getX() * len + movement.getDest().x + 0.5, movement.getDest().y, flatDir.getZ() * len + movement.getDest().z + 0.5),
                 movement.getDest().offset(flatDir.getX() * (i - pathPosition), 0, flatDir.getZ() * (i - pathPosition)));
     }
@@ -626,7 +625,7 @@ public class PathExecutor implements IPathExecutor, Helper {
                         "Path has end %s instead of %s after trimming its start",
                         newPath.getDest(), path.getDest()));
             }
-            logDebug("Discarding earliest segment movements, length cut from " + path.length() + " to " + newPath.length());
+            logDebug(Component.translatableEscape("baritone.log.path.discard_earliest", path.length(), newPath.length()));
             PathExecutor ret = new PathExecutor(behavior, newPath);
             ret.pathPosition = pathPosition - cutoffAmt;
             ret.currentMovementOriginalCostEstimate = currentMovementOriginalCostEstimate;

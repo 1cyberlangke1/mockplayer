@@ -156,7 +156,7 @@ public final class PathingBehavior extends Behavior implements IPathingBehavior,
             if (current.failed() || current.finished()) {
                 current = null;
                 if (goal == null || goal.isInGoal(ctx.playerFeet())) {
-                    logDebug("All done. At " + goal);
+                    logDebug(Component.translatableEscape("baritone.log.path.arrived", goal));
                     queuePathEvent(PathEvent.AT_GOAL);
                     next = null;
                     if (settings().disconnectOnArrival.value) {
@@ -168,7 +168,7 @@ public final class PathingBehavior extends Behavior implements IPathingBehavior,
                 }
                 if (next != null && !next.getPath().positions().contains(ctx.playerFeet()) && !next.getPath().positions().contains(expectedSegmentStart)) { // can contain either one
                     // if the current path failed, we may not actually be on the next one, so make sure
-                    logDebug("Discarding next path as it does not contain current position");
+                    logDebug(Component.translatableEscape("baritone.log.path.discard_next"));
                     // for example if we had a nicely planned ahead path that starts where current ends
                     // that's all fine and good
                     // but if we fail in the middle of current
@@ -178,7 +178,7 @@ public final class PathingBehavior extends Behavior implements IPathingBehavior,
                     next = null;
                 }
                 if (next != null) {
-                    logDebug("Continuing on to planned next path");
+                    logDebug(Component.translatableEscape("baritone.log.path.continue_next"));
                     queuePathEvent(PathEvent.CONTINUING_ONTO_PLANNED_NEXT);
                     current = next;
                     next = null;
@@ -200,7 +200,7 @@ public final class PathingBehavior extends Behavior implements IPathingBehavior,
             // at this point, we know current is in progress
             if (safeToCancel && next != null && next.snipsnapifpossible()) {
                 // a movement just ended; jump directly onto the next path
-                logDebug("Splicing into planned next path early...");
+                logDebug(Component.translatableEscape("baritone.log.path.splice_early"));
                 queuePathEvent(PathEvent.SPLICING_ONTO_NEXT_EARLY);
                 current = next;
                 next = null;
@@ -230,7 +230,7 @@ public final class PathingBehavior extends Behavior implements IPathingBehavior,
                     // and this path has 7.5 seconds or less left
                     // don't include the current movement so a very long last movement (e.g. descend) doesn't trip it up
                     // if we actually included current, it wouldn't start planning ahead until the last movement was done, if the last movement took more than 7.5 seconds on its own
-                    logDebug("Path almost over. Planning ahead...");
+                    logDebug(Component.translatableEscape("baritone.log.path.plan_ahead"));
                     queuePathEvent(PathEvent.NEXT_SEGMENT_CALC_STARTED);
                     findPathInNewThread(current.getPath().getDest(), false, context);
                 }
@@ -485,7 +485,7 @@ public final class PathingBehavior extends Behavior implements IPathingBehavior,
         }
         Goal goal = this.goal;
         if (goal == null) {
-            logDebug("no goal"); // TODO should this be an exception too? definitely should be checked by caller
+            logDebug(Component.translatableEscape("baritone.log.path.no_goal")); // TODO should this be an exception too? definitely should be checked by caller
             return;
         }
         long primaryTimeout;
@@ -499,12 +499,12 @@ public final class PathingBehavior extends Behavior implements IPathingBehavior,
         }
         AbstractNodeCostSearch pathfinder = createPathfinder(start, goal, current == null ? null : current.getPath(), context);
         if (!Objects.equals(pathfinder.getGoal(), goal)) { // will return the exact same object if simplification didn't happen
-            logDebug("Simplifying " + goal.getClass() + " to GoalXZ due to distance");
+            logDebug(Component.translatableEscape("baritone.log.path.simplify_goal", goal.getClass()));
         }
         inProgress = pathfinder;
         Baritone.getExecutor().execute(() -> {
             if (talkAboutIt) {
-                logDebug("Starting to search for path from " + start + " to " + goal);
+                logDebug(Component.translatableEscape("baritone.log.path.search_start", start, goal));
             }
 
             PathCalculationResult calcResult = pathfinder.calculate(primaryTimeout, failureTimeout);
@@ -517,7 +517,7 @@ public final class PathingBehavior extends Behavior implements IPathingBehavior,
                             current = executor.get();
                             resetEstimatedTicksToGoal(start);
                         } else {
-                            logDebug("Warning: discarding orphan path segment with incorrect start");
+                            logDebug(Component.translatableEscape("baritone.log.path.orphan_segment"));
                         }
                     } else {
                         if (calcResult.getType() != PathCalculationResult.Type.CANCELLATION && calcResult.getType() != PathCalculationResult.Type.EXCEPTION) {
@@ -532,7 +532,7 @@ public final class PathingBehavior extends Behavior implements IPathingBehavior,
                                 queuePathEvent(PathEvent.NEXT_SEGMENT_CALC_FINISHED);
                                 next = executor.get();
                             } else {
-                                logDebug("Warning: discarding orphan next segment with incorrect start");
+                                logDebug(Component.translatableEscape("baritone.log.path.orphan_next"));
                             }
                         } else {
                             queuePathEvent(PathEvent.NEXT_CALC_FAILED);
@@ -540,14 +540,14 @@ public final class PathingBehavior extends Behavior implements IPathingBehavior,
                     } else {
                         //throw new IllegalStateException("I have no idea what to do with this path");
                         // no point in throwing an exception here, and it gets it stuck with inProgress being not null
-                        logDirect("Warning: PathingBehaivor illegal state! Discarding invalid path!");
+                        logDirect(Component.translatableEscape("baritone.log.path.illegal_state"));
                     }
                 }
                 if (talkAboutIt && current != null && current.getPath() != null) {
                     if (goal.isInGoal(current.getPath().getDest())) {
-                        logDebug("Finished finding a path from " + start + " to " + goal + ". " + current.getPath().getNumNodesConsidered() + " nodes considered");
+                        logDebug(Component.translatableEscape("baritone.log.path.found_full", start, goal, current.getPath().getNumNodesConsidered()));
                     } else {
-                        logDebug("Found path segment from " + start + " towards " + goal + ". " + current.getPath().getNumNodesConsidered() + " nodes considered");
+                        logDebug(Component.translatableEscape("baritone.log.path.found_segment", start, goal, current.getPath().getNumNodesConsidered()));
                     }
                 }
                 synchronized (pathCalcLock) {

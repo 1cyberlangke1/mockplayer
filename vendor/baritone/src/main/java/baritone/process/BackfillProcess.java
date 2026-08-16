@@ -17,6 +17,7 @@
 
 package com.mockplayer.baritone.process;
 
+import net.minecraft.network.chat.Component;
 import com.mockplayer.baritone.Baritone;
 import com.mockplayer.baritone.api.process.PathingCommand;
 import com.mockplayer.baritone.api.process.PathingCommandType;
@@ -50,7 +51,7 @@ public final class BackfillProcess extends BaritoneProcessHelper {
             return false;
         }
         if (settings().allowParkour.value) {
-            logDirect("Backfill cannot be used with allowParkour true");
+            logDirect(Component.translatableEscape("baritone.log.misc.backfill_parkour"));
             settings().backfill.value = false;
             return false;
         }

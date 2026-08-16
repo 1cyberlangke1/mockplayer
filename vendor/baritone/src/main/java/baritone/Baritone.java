@@ -91,8 +91,7 @@ public class Baritone implements IBaritone {
 
     /** 本实例自己的设置（per-instance，假人之间配置独立；不再用全局静态单例） */
     public final Settings settings = new Settings();
-    /** 假人连接的服务器标识（null = 主玩家语义：单机/currentServer 推导；
-     *  非 null 时 WorldProvider 用它做缓存目录键）。 */
+    /** 假人连接的服务器标识（null = 主玩家语义；非 null 时做缓存目录键）。 */
     private volatile String serverKey;
 
     Baritone(Minecraft mc) {
@@ -101,8 +100,8 @@ public class Baritone implements IBaritone {
 
     /**
      * @param mc       Minecraft 单例
-     * @param player   绑定的假人 player（null = primary 动态 mc.player）
-     * @param gameMode 绑定的假人 gameMode（null = primary 用 mc.gameMode）
+     * @param player   绑定的假人 player（null = 动态 mc.player）
+     * @param gameMode 绑定的假人 gameMode（null = 用 mc.gameMode）
      */
     Baritone(Minecraft mc, LocalPlayer player, MultiPlayerGameMode gameMode) {
         this.mc = mc;
@@ -142,12 +141,6 @@ public class Baritone implements IBaritone {
 
         this.worldProvider = new WorldProvider(this);
         this.selectionManager = new SelectionManager(this);
-    }
-
-    /** 假人重生/切换 player 后更新绑定引用（primary 实例是空操作）。 */
-    @Override
-    public void updateBoundPlayer(LocalPlayer player) {
-        ((BaritonePlayerContext) this.playerContext).setPlayer(player);
     }
 
     public void registerBehavior(IBehavior behavior) {
@@ -270,6 +263,12 @@ public class Baritone implements IBaritone {
     /** 服务器标识（null = 未设置，走主玩家语义）。 */
     public String getServerKey() {
         return this.serverKey;
+    }
+
+    /** 假人重生/切换 player 后更新绑定引用（primary 实例是空操作）。 */
+    @Override
+    public void updateBoundPlayer(LocalPlayer player) {
+        ((BaritonePlayerContext) this.playerContext).setPlayer(player);
     }
 
     /** 关闭并保存当前世界缓存（假人销毁时调用；无其他实例引用时从静态 map 移除）。 */
