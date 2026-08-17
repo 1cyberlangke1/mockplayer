@@ -159,14 +159,19 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
     }
 
     public CompletableFuture<UnpackedSegment> pathFindAsync(final BlockPos src, final BlockPos dst) {
+        System.err.println("[elytra-diag] pathFindAsync src=" + src + " dst=" + dst
+                + " generate=" + (settings.elytraPredictTerrain.value && this.dimension == Level.NETHER));
         final BlockPos adjustedSrc = src.below(minY);
         final BlockPos adjustedDst = dst.below(minY);
         boolean generate = settings.elytraPredictTerrain.value && this.dimension == Level.NETHER;
         Lock l = generate ? writeLock : readLock;
         ExecutorService exec = generate ? writeExecutor : readExecutor;
         return CompletableFuture.supplyAsync(() -> {
+            System.err.println("[elytra-diag] pathFindAsync acquiring lock ("
+                    + (generate ? "write" : "read") + ")");
             l.lock();
             try {
+                System.err.println("[elytra-diag] pathFindAsync lock acquired, calling native pathFind");
                 final PathSegment segment = NetherPathfinder.pathFind(
                         this.context,
                         adjustedSrc.getX(), adjustedSrc.getY(), adjustedSrc.getZ(),
@@ -179,14 +184,16 @@ public final class NetherPathfinderContext implements IElytraPathFinder {
                         8.0 // fakeChunkCost
                 );
                 if (segment == null) {
+                    System.err.println("[elytra-diag] pathFindAsync native returned null");
                     throw new PathCalculationException("Path calculation failed");
                 }
 
+                System.err.println("[elytra-diag] pathFindAsync native returned segment finished=" + segment.finished);
                 return new UnpackedSegment(UnpackedSegment.from(segment).collect().stream().map(pos -> pos.above(minY)), segment.finished);
             } finally {
                 l.unlock();
             }
-        }, exec);
+        }, exec).whenComplete((r, ex) -> System.err.println("[elytra-diag] pathFindAsync done ex=" + ex));
     }
 
     /**

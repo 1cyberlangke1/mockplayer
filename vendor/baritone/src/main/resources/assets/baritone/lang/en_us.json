@@ -104,6 +104,7 @@
   "baritone.log.mine.have_items": "Have %s valid items",
   "baritone.log.mine.allow_break_off": "Unable to mine when allowBreak is false and target block is not in allowBreakAnyway!",
   "baritone.log.elytra.path_failed": "Failed to compute path to destination",
+  "baritone.log.elytra.takeoff_timeout": "Failed to take off (no elytra equipped or could not start gliding)",
   "baritone.log.elytra.segment_recompute_failed": "Failed to recompute segment",
   "baritone.log.elytra.next_segment_failed": "Failed to compute next segment",
   "baritone.log.elytra.near_segment_start": "Player is near the segment start, therefore repeating this calculation is pointless. Marking as complete",

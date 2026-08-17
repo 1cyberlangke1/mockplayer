@@ -42,6 +42,9 @@ public final class BaritoneNavigator implements BotNavigator {
     private NavigatorTask task = NavigatorTask.NONE;
     /** 当前任务目标（查询用；任务结束清空）。 */
     private BlockPos goal;
+    /** mockplayer P15：elytra 任务中假人未滑翔（没起飞）的连续 tick 计数，
+     *  超时强制解锁（防止寻路失败但 process 仍 active 时输入被锁死）。 */
+    private int elytraNoFlyTicks;
 
     public BaritoneNavigator(BotImpl bot, IBaritone baritone) {
         this.bot = bot;
@@ -230,7 +233,22 @@ public final class BaritoneNavigator implements BotNavigator {
                         b.getCustomGoalProcess().isActive() || b.getElytraProcess().isActive();
                 case FOLLOW -> b.getFollowProcess().isActive();
                 case MINE -> b.getMineProcess().isActive();
-                case ELYTRA -> b.getElytraProcess().isActive();
+                case ELYTRA -> {
+                    boolean elytraActive = b.getElytraProcess().isActive();
+                    if (elytraActive && this.bot.getLocalPlayer() != null
+                            && !this.bot.getLocalPlayer().isFallFlying()
+                            && ++this.elytraNoFlyTicks > 400) {
+                        // mockplayer P15（解锁兜底）：elytra 任务 active 但假人
+                        // 20 秒没起飞（未穿鞘翅/flag 未生效/寻路失败未收尾）→
+                        // 强制取消释放输入控制，用户恢复可操作
+                        b.getPathingBehavior().cancelEverything();
+                        elytraActive = false;
+                    } else if (this.bot.getLocalPlayer() == null
+                            || this.bot.getLocalPlayer().isFallFlying()) {
+                        this.elytraNoFlyTicks = 0;
+                    }
+                    yield elytraActive;
+                }
                 default -> false;
             };
         }

@@ -236,11 +236,13 @@ bestPathSoFar(map_t<NodePos, std::unique_ptr<PathNode>>& map, const PathNode* st
     if (distSq > MIN_DIST_PATH * MIN_DIST_PATH) {
         return createPath(map, start, end, startPos, goal, Path::Type::SEGMENT);
     } else {
-        if (VERBOSE) {
-            std::cout << "Path took too long and got nowhere\n";
-            auto[x, y, z] = end->pos.absolutePosCenter();
-            std::cout << "(Path ended at {" << x << ", " << y << ", " << z << "})\n";
-        }
+        // 诊断（mockplayer P15）：bestSoFar 离起点 <= 5 格返回无解（nullopt）→
+        // pathFind 返回 null → Java 侧 path_failed。打 stderr（进游戏日志）便于
+        // 区分「真的没路」还是「A* 太慢没走远」。
+        std::cerr << "[nether-pathfinder] bestPathSoFar < MIN_DIST_PATH(5): start=("
+                  << startPos.x << "," << startPos.y << "," << startPos.z << ") best=("
+                  << end->pos.absolutePosCenter().x << "," << end->pos.absolutePosCenter().y
+                  << "," << end->pos.absolutePosCenter().z << ")" << std::endl;
         return std::nullopt;
     }
 
@@ -353,6 +355,9 @@ std::optional<Path> findPathSegment(Context& ctx, const NodePos& start, const No
             fakeChunkVisits = 0;
         }
         if (fakeChunkVisits >= 100 && airIfFake) {
+            // 诊断（mockplayer P15）：连续 100 个未加载 chunk 节点截断
+            std::cerr << "[nether-pathfinder] fakeChunkVisits>=100 cut (airIfFake) node=("
+                      << bpos.x << "," << bpos.y << "," << bpos.z << ")" << std::endl;
             return bestPathSoFar(map, startNode, bestSoFar, startCenter, goalCenter);
         }
         const ChunkPos cposNorth = bpos.north(16).toChunkPos();

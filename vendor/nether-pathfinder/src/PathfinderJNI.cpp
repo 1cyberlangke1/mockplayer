@@ -259,6 +259,9 @@ extern "C" {
             // std::bad_alloc）一律不逃逸 JNI 边界——逃逸会导致 mingw 异常经 SEH
             // RaiseException → JVM Internal Error 0x20474343 崩溃。返回 null →
             // Java 侧 PathCalculationException 优雅失败。
+            std::cerr << "[nether-pathfinder] pathFind caught C++ exception (x1=" << x1
+                      << " y1=" << y1 << " z1=" << z1
+                      << " x2=" << x2 << " y2=" << y2 << " z2=" << z2 << ")" << std::endl;
             return nullptr;
         }
     }
