@@ -104,6 +104,7 @@
   "baritone.log.mine.have_items": "已有 %1$s 个有效物品",
   "baritone.log.mine.allow_break_off": "不允许破坏方块且目标方块不在豁免列表中，无法挖矿！",
   "baritone.log.elytra.path_failed": "计算到目标路径失败",
+  "baritone.log.elytra.takeoff_timeout": "起飞失败（未装备鞘翅或无法开始滑翔）",
   "baritone.log.elytra.segment_recompute_failed": "重新计算路径段失败",
   "baritone.log.elytra.next_segment_failed": "计算下一段路径失败",
   "baritone.log.elytra.near_segment_start": "玩家已接近路径段起点，重复计算无意义，标记完成",

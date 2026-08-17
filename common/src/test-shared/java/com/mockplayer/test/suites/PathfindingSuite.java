@@ -71,15 +71,22 @@ public class PathfindingSuite extends TestSuite {
         ctx.await("tp area chunk loaded", () -> ctx.bot() != null
                 && ctx.bot().getLevel() != null
                 && !ctx.bot().getLevel().getBlockState(new BlockPos(100, 3, 100)).isAir(), 300);
-        // 平台：起点 +300/+50/+300 → (400, 54, 400)，10×10 石头
+        // 平台坐标 = 相对 bot 起点 +300/+50/+300（不是写死坐标——写死可能因
+        // 地表高度不同导致平台在地底/位置错位）
+        java.util.concurrent.atomic.AtomicReference<BlockPos> startRef = new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.concurrent.atomic.AtomicReference<BlockPos> platformRef = new java.util.concurrent.atomic.AtomicReference<>();
+        ctx.run(() -> {
+            BlockPos base = ctx.bot().getLocalPlayer().blockPosition();
+            startRef.set(base);
+            platformRef.set(base.offset(300, 50, 300));
+        });
+        // /fill 一条命令铺 10×10 石头平台（x..x+9, z..z+9, y 一层）
         ctx.run(() -> ctx.server().execute(() -> {
-            var src = ctx.server().createCommandSourceStack();
-            for (int dx = 0; dx < 10; dx++) {
-                for (int dz = 0; dz < 10; dz++) {
-                    ctx.server().getCommands().performPrefixedCommand(src,
-                            String.format("setblock %d %d %d minecraft:stone", 400 + dx, 54, 400 + dz));
-                }
-            }
+            BlockPos p = platformRef.get();
+            ctx.server().getCommands().performPrefixedCommand(
+                    ctx.server().createCommandSourceStack(),
+                    String.format("fill %d %d %d %d %d %d minecraft:stone",
+                            p.getX(), p.getY(), p.getZ(), p.getX() + 9, p.getY(), p.getZ() + 9));
         }));
         // 装备：服务端命令穿鞘翅（胸甲槽）+ 64 烟花（原版 /item 命令走完整同步链路）
         SuitesSupport.give(ctx, BOT_A, "minecraft:firework_rocket 64");
@@ -94,50 +101,32 @@ public class PathfindingSuite extends TestSuite {
                 .is(net.minecraft.world.item.Items.ELYTRA)
                 && ctx.bot().getLocalPlayer().getInventory()
                 .countItem(net.minecraft.world.item.Items.FIREWORK_ROCKET) >= 1, 200);
-        // 生产场景模拟（2026-08-17 生产实测崩溃复现）：假人站在地面（y=4），
-        // /control elytra 远处平台中心——生产日志显示命令后第一次 pathFindAsync
-        // （native pathFind）立即 0x20474343 崩溃。此处必须在进程不崩的前提下
-        // 走完 native 调用窗口（pathFind timeout 10000ms = 200 ticks），
-        // 走到断言即证明 native 防御生效（原实现 C++ 异常逃逸直接杀 JVM）。
-        ctx.run(() -> ctx.platform().executeClientCommand("control " + BOT_A + " elytra 405 54 405"));
-        ctx.run(() -> this.waitTicks = 0);
-        ctx.await("elytra ground-start native window (300 ticks)", () -> ++this.waitTicks >= 300, 400);
-        ctx.check("elytra ground-start did not crash jvm", () -> true);
-        ctx.run(() -> ctx.bot().navigate().stop());
-        // 高空起飞真飞（功能验证）：tp 到平台方向的起点上空 +45，开鞘翅后飞往平台
-        ctx.run(() -> ctx.server().execute(() -> {
-            ctx.server().getCommands().performPrefixedCommand(
-                    ctx.server().createCommandSourceStack(), "tp " + BOT_A + " 100 49 100");
-        }));
-        ctx.await("bot in air", () -> ctx.bot() != null
-                && ctx.bot().getLocalPlayer() != null
-                && ctx.bot().getLocalPlayer().getY() > 40, 300);
+        // 真飞（用户真实场景复刻）：假人站在地面（不 tp 高空、不手动开鞘翅），
+        // 给鞘翅 + 64 烟花后 /control elytra——ElytraProcess 必须自己平地起飞
+        // （START_FLYING 持续按跳 → 跳起开鞘翅）并飞到 300 格外的 10×10 平台。
+        // 覆盖：命令 → native pathFind（防御不崩）→ 平地起飞 → 烟花加速 →
+        // 滑翔导航 → 到达平台全链。
+        // elytra 目标 = 平台中心（相对 bot；注意 ctx.run 延迟执行，ref 取值必须在 run 内）
         ctx.run(() -> {
-            net.minecraft.client.player.LocalPlayer lp = ctx.bot().getLocalPlayer();
-            if (lp.tryToStartFallFlying()) {
-                lp.connection.send(new net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket(lp,
-                        net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket.Action.START_FALL_FLYING));
-            }
+            BlockPos target = platformRef.get().offset(4, 0, 4);
+            ctx.platform().executeClientCommand(
+                    "control " + BOT_A + " elytra " + target.getX() + " " + target.getY() + " " + target.getZ());
         });
-        ctx.await("fall flying active", () -> ctx.bot() != null
-                && ctx.bot().getLocalPlayer() != null
-                && ctx.bot().getLocalPlayer().isFallFlying(), 100);
-        ctx.run(() -> ctx.platform().executeClientCommand("control " + BOT_A + " elytra 405 54 405"));
         // 飞行中间证据：假人必须自主离开起点 100+ 格（水平位移）——排除「瞬移/原地
         // 不动/坠落没飞」：坠落滑翔落点离起点最多 ~200 格、行走 300 格需 ~70s 且
         // 平台在 50 格高空无法步行到达，唯一到达路径是真正滑翔飞行
         ctx.await("elytra flew away from start (>100 blocks)", () -> ctx.bot() != null
                 && ctx.bot().getLocalPlayer() != null
-                && Math.hypot(ctx.bot().getLocalPlayer().getX() - 100,
-                ctx.bot().getLocalPlayer().getZ() - 100) > 100, 4800);
-        // 长超时：接近平台（水平 < 8 且垂直差 < 12，平台高度 54）或任务完成（到达/放弃）
+                && Math.hypot(ctx.bot().getLocalPlayer().getX() - startRef.get().getX(),
+                ctx.bot().getLocalPlayer().getZ() - startRef.get().getZ()) > 100, 2400);
+        // 到达超时 2 分钟：接近平台（水平 < 8 且垂直差 < 12，平台高度 54）或任务完成（到达/放弃）
         ctx.await("elytra reached platform", () -> ctx.bot() != null
                 && ctx.bot().getLocalPlayer() != null
-                && (nearPlatform(ctx, 400, 54, 400)
-                || !ctx.bot().navigate().isActive()), 4800);
+                && (nearPlatform(ctx, platformRef.get())
+                || !ctx.bot().navigate().isActive()), 2400);
         ctx.check("elytra actually near platform", () -> ctx.bot() != null
                 && ctx.bot().getLocalPlayer() != null
-                && nearPlatform(ctx, 400, 54, 400));
+                && nearPlatform(ctx, platformRef.get()));
         // 到达高度硬证据：假人 y 必须在平台高度附近（≥40）——不是在地面（y=4）蒙混过关
         ctx.check("elytra reached platform altitude (y>=40)", () -> ctx.bot() != null
                 && ctx.bot().getLocalPlayer() != null
@@ -147,11 +136,11 @@ public class PathfindingSuite extends TestSuite {
     }
 
     /** 假人是否在平台附近（水平 < 8 且垂直差 < 12；平台 10×10 中心 (px+4.5, py, pz+4.5)）。 */
-    private static boolean nearPlatform(TestContext ctx, int px, int py, int pz) {
+    private static boolean nearPlatform(TestContext ctx, BlockPos platform) {
         net.minecraft.client.player.LocalPlayer lp = ctx.bot().getLocalPlayer();
-        double dx = lp.getX() - (px + 4.5);
-        double dz = lp.getZ() - (pz + 4.5);
-        double dy = lp.getY() - py;
+        double dx = lp.getX() - (platform.getX() + 4.5);
+        double dz = lp.getZ() - (platform.getZ() + 4.5);
+        double dy = lp.getY() - platform.getY();
         return Math.sqrt(dx * dx + dz * dz) < 8 && Math.abs(dy) < 12;
     }
 

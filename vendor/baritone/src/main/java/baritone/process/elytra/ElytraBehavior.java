@@ -187,6 +187,7 @@ public final class ElytraBehavior implements Helper {
         }
 
         public CompletableFuture<Void> pathToDestination() {
+            System.err.println("[elytra-diag] PathManager.pathToDestination()");
             return this.pathToDestination(ctx.playerFeet());
         }
 
@@ -207,6 +208,13 @@ public final class ElytraBehavior implements Helper {
                             final Throwable cause = ex.getCause();
                             if (cause instanceof PathCalculationException) {
                                 logDirect(net.minecraft.network.chat.Component.translatableEscape("baritone.log.elytra.path_failed"));
+                                // mockplayer P15（解锁修复）：地面未起飞时寻路失败 →
+                                // 结束任务释放输入控制（原版飞行中段失败只日志继续，
+                                // 但 mockplayer 一次 /control elytra 失败就该收尾，
+                                // 否则 process 永远 active → navigating 锁死玩家控制）
+                                if (!ctx.player().isFallFlying()) {
+                                    ElytraBehavior.this.process.onLostControl();
+                                }
                             } else {
                                 logUnhandledException(cause);
                             }
@@ -313,6 +321,7 @@ public final class ElytraBehavior implements Helper {
 
         // mickey resigned
         private CompletableFuture<Void> path0(BlockPos src, BlockPos dst, UnaryOperator<UnpackedSegment> operator) {
+            System.err.println("[elytra-diag] PathManager.path0 src=" + src + " dst=" + dst);
             return ElytraBehavior.this.pathFinder.pathFindAsync(src, dst)
                     .thenApply(operator)
                     .thenAcceptAsync(this::setPath, ctx.minecraft()::execute);
@@ -484,6 +493,8 @@ public final class ElytraBehavior implements Helper {
     }
 
     public void pathTo() {
+        System.err.println("[elytra-diag] behavior.pathTo autoJump=" + baritone.settings().elytraAutoJump.value
+                + " fallFlying=" + (ctx.player() != null && ctx.player().isFallFlying()));
         if (!baritone.settings().elytraAutoJump.value || ctx.player().isFallFlying()) {
             this.pathManager.pathToDestination();
         }
